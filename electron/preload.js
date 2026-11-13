@@ -3,14 +3,34 @@
 /**
  * Preload script — jembatan antara renderer (web) dan main process Electron.
  * contextIsolation: true → hanya exposeInMainWorld yang bisa diakses dari halaman web.
- *
- * Saat ini tidak ada fungsi khusus yang perlu di-expose karena server berjalan
- * sebagai HTTP lokal dan semua komunikasi sudah via fetch/WebSocket biasa.
- * File ini tetap diperlukan agar webPreferences.preload valid.
  */
 
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose flag bahwa app berjalan di dalam Electron
 // (bisa dipakai di JS frontend untuk menyembunyikan tip "buka di browser", dll)
 contextBridge.exposeInMainWorld('__ELECTRON__', true);
+
+// ── Tunnel URL dari main process ──────────────────────────────────────────────
+// Main process mengirim 'tunnel-url' via ipcMain.send setiap kali tunnel online.
+// Renderer juga bisa aktif minta via invoke('get-tunnel-url').
+contextBridge.exposeInMainWorld('__electronBridge__', {
+  /**
+   * Daftarkan listener yang dipanggil saat tunnel URL diterima dari main.
+   * fn(url: string) dipanggil setiap kali tunnel URL berubah.
+   * Mengembalikan fungsi unlisten.
+   */
+  onTunnelUrl(fn) {
+    const handler = (_event, url) => fn(url);
+    ipcRenderer.on('tunnel-url', handler);
+    return () => ipcRenderer.removeListener('tunnel-url', handler);
+  },
+
+  /**
+   * Ambil tunnel URL saat ini dari main process (sekali panggil).
+   * Berguna saat halaman baru dimuat dan belum sempat menerima event.
+   */
+  getTunnelUrl() {
+    return ipcRenderer.invoke('get-tunnel-url');
+  }
+});

@@ -1,5 +1,5 @@
 'use strict';
-const { execFile } = require('child_process');
+const { execFile, spawn, spawnSync } = require('child_process');
 /*
  * JekInteract — server lokal
  *
@@ -13,7 +13,7 @@ const { execFile } = require('child_process');
  */
 const http = require('http');
 const https = require('https');
-const { WebSocketServer } = require('ws');
+const { WebSocketServer, WebSocket: NodeWebSocket } = require('ws');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -696,7 +696,7 @@ function openStream(ws, q, remoteIp) {
   wsLog(role, id, 'online', remoteIp);
   const c = { ws, role, id, presence };
   clients.add(c);
-  wsSend(c, 'hello', { state, status: statusPayload(), tiktok: tiktokSt, likeLeaderboard: likeLeaderboardObj(), giftLeaderboard: giftLeaderboardObj(), liveStats: liveStatsPayload(), musicstate: musicStatePayload(), serverTime: Date.now(), version: VERSION });
+  wsSend(c, 'hello', { state, status: statusPayload(), tiktok: tiktokSt, likeLeaderboard: likeLeaderboardObj(), giftLeaderboard: giftLeaderboardObj(), liveStats: liveStatsPayload(), musicstate: musicStatePayload(), obsstate: obsStatusPayload(), tunnel: tunnelPayload(), serverTime: Date.now(), version: VERSION });
 
   // Ping tiap 25 detik — menjaga koneksi tetap aktif melewati proxy/Cloudflare (idle timeout ~60-90 detik).
   // Tidak ada terminate berdasarkan pong: Android Chrome freeze background tab sehingga pong terlambat,
@@ -867,7 +867,11 @@ async function api(req, res, pathname, q) {
   let mm;
 
   if (pathname === '/api/info' && m === 'GET') {
-    return json(res, 200, { name: 'JekInteract', version: VERSION, port: activePort, addresses: lanAddresses() });
+    return json(res, 200, { name: 'JekInteract', version: VERSION, port: activePort, addresses: lanAddresses(), tunnel: tunnelPayload() });
+  }
+
+  if (pathname === '/api/tunnel/status' && m === 'GET') {
+    return json(res, 200, tunnelPayload());
   }
 
   if (pathname === '/api/log' && m === 'POST') {
@@ -1071,6 +1075,61 @@ async function api(req, res, pathname, q) {
     musicTickStop();
     broadcastMusicState();
     return json(res, 200, { ok: true });
+  }
+
+  /* ---------- OBS WebSocket API ---------- */
+  if (pathname === '/api/obs/connect' && m === 'POST') {
+    const body = await readJSON(req);
+    const ip       = String(body.ip       || '127.0.0.1').trim();
+    const port     = String(body.port     || '4455').trim();
+    const password = String(body.password || '').trim();
+    if (!ip || !port) return json(res, 400, { ok: false, error: 'ip dan port wajib diisi.' });
+    obsConnect(ip, port, password);
+    return json(res, 200, { ok: true });
+  }
+
+  if (pathname === '/api/obs/disconnect' && m === 'POST') {
+    obsDisconnect();
+    return json(res, 200, { ok: true });
+  }
+
+  if (pathname === '/api/obs/status' && m === 'GET') {
+    return json(res, 200, obsStatusPayload());
+  }
+
+  if (pathname === '/api/obs/scenes' && m === 'GET') {
+    return json(res, 200, { ok: true, scenes: obsState.scenes, currentScene: obsState.currentScene || '' });
+  }
+
+  if (pathname === '/api/obs/sources' && m === 'GET') {
+    const scene = q.get('scene') || obsState.currentScene || '';
+    const sources = obsState.sources[scene] || [];
+    return json(res, 200, { ok: true, scene, sources });
+  }
+
+  if (pathname === '/api/obs/command' && m === 'POST') {
+    const body = await readJSON(req);
+    const type = String(body.type || '');
+    if (obsState.status !== 'online') return json(res, 400, { ok: false, error: 'OBS tidak terhubung.' });
+    if (type === 'scene') {
+      const sceneName = String(body.scene || '');
+      const mode = String(body.mode || 'revert');
+      const duration = Number(body.duration) || 10;
+      if (!sceneName) return json(res, 400, { ok: false, error: 'scene wajib diisi.' });
+      obsSwitchScene(sceneName, mode, duration);
+      return json(res, 200, { ok: true });
+    }
+    if (type === 'source') {
+      const srcScene  = String(body.srcScene  || obsState.currentScene || '');
+      const srcName   = String(body.source    || '');
+      const srcOff    = body.srcOff !== false;
+      const duration  = Number(body.duration) || 10;
+      if (!srcName) return json(res, 400, { ok: false, error: 'source wajib diisi.' });
+      obsSetSourceVisible(srcScene, srcName, true);
+      if (srcOff) setTimeout(() => obsSetSourceVisible(srcScene, srcName, false), duration * 1000);
+      return json(res, 200, { ok: true });
+    }
+    return json(res, 400, { ok: false, error: 'type tidak valid. Gunakan "scene" atau "source".' });
   }
 
   return json(res, 404, { error: 'Endpoint tidak ditemukan' });
@@ -1504,6 +1563,28 @@ function runActivities(ev, eventData) {
         fireKeystrokes(interaction.keystrokes);
       }, delayMs);
     }
+
+    // OBS Scene: pindah scene jika trigger aktif
+    if (interaction.triggers.obsScene && interaction.obs && interaction.obs.scene) {
+      const delayMs = (interaction.delay || 0) * 1000;
+      setTimeout(() => {
+        obsSwitchScene(interaction.obs.scene, interaction.obs.mode || 'revert', interaction.duration || 10);
+      }, delayMs);
+    }
+
+    // OBS Source: aktifkan source jika trigger aktif
+    if (interaction.triggers.obsSource && interaction.obs && interaction.obs.source) {
+      const delayMs = (interaction.delay || 0) * 1000;
+      setTimeout(() => {
+        const srcScene = interaction.obs.srcScene || obsState.currentScene;
+        obsSetSourceVisible(srcScene, interaction.obs.source, true);
+        if (interaction.obs.srcOff) {
+          setTimeout(() => {
+            obsSetSourceVisible(srcScene, interaction.obs.source, false);
+          }, (interaction.duration || 10) * 1000);
+        }
+      }, delayMs);
+    }
   }
 }
 
@@ -1726,6 +1807,300 @@ function tiktokDisconnect(res) {
   broadcastTiktok('disconnected', { username: u, manual: true });
   broadcastTiktokState();
   return json(res, 200, { ok: true });
+}
+
+/* ------------------------------------------------------------------ */
+/* OBS WebSocket Client — integrasi OBS via WebSocket protocol v5      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * State koneksi OBS.
+ * status: 'offline' | 'connecting' | 'online' | 'error'
+ */
+const obsState = {
+  status: 'offline',
+  ip: '127.0.0.1',
+  port: '4455',
+  password: '',
+  error: '',
+  scenes: [],         // ['Gameplay', 'Just Chatting', ...]
+  sources: {},        // { 'Gameplay': ['Webcam', 'Alert'], ... }
+  currentScene: ''
+};
+
+let obsWs = null;             // WebSocket aktif ke OBS
+let obsReqId = 0;             // counter request-id OBS
+const obsCallbacks = {};      // reqId → { resolve, reject }
+let obsReconnTimer = null;
+let obsManualDisconnect = false;
+
+function obsStatusPayload() {
+  return {
+    status:       obsState.status,
+    ip:           obsState.ip,
+    port:         obsState.port,
+    error:        obsState.error,
+    scenes:       obsState.scenes,
+    sources:      obsState.sources,
+    currentScene: obsState.currentScene
+  };
+}
+
+function broadcastObsState() {
+  broadcast('obsstate', obsStatusPayload(), (c) => c.role === 'dashboard');
+}
+
+/** Kirim request OBS WebSocket v5 dan tunggu response-nya. */
+function obsSend(requestType, requestData) {
+  return new Promise((resolve, reject) => {
+    if (!obsWs || obsWs.readyState !== NodeWebSocket.OPEN) {
+      return reject(new Error('OBS tidak terhubung'));
+    }
+    const id = String(++obsReqId);
+    obsCallbacks[id] = { resolve, reject };
+    const msg = { op: 6, d: { requestType, requestId: id } };
+    if (requestData) msg.d.requestData = requestData;
+    obsWs.send(JSON.stringify(msg));
+    // timeout 5 detik
+    setTimeout(() => {
+      if (obsCallbacks[id]) {
+        delete obsCallbacks[id];
+        reject(new Error('Request OBS timeout: ' + requestType));
+      }
+    }, 5000);
+  });
+}
+
+/** Muat daftar scene dari OBS. */
+async function obsLoadScenes() {
+  try {
+    const r = await obsSend('GetSceneList');
+    if (r && r.responseData) {
+      const scenes = (r.responseData.scenes || []).map((s) => s.sceneName || s.name || '').filter(Boolean);
+      scenes.reverse(); // OBS mengirim dari bawah ke atas
+      obsState.scenes = scenes;
+      obsState.currentScene = r.responseData.currentProgramSceneName || scenes[0] || '';
+    }
+  } catch (e) {
+    console.warn('[obs] gagal muat scenes:', e.message);
+  }
+}
+
+/** Muat daftar source untuk satu scene. */
+async function obsLoadSources(sceneName) {
+  if (!sceneName) return;
+  try {
+    const r = await obsSend('GetSceneItemList', { sceneName });
+    if (r && r.responseData) {
+      const sources = (r.responseData.sceneItems || [])
+        .map((si) => si.sourceName || (si.source && si.source.name) || '')
+        .filter(Boolean);
+      obsState.sources[sceneName] = sources;
+    }
+  } catch (e) {
+    console.warn('[obs] gagal muat sources scene "' + sceneName + '":', e.message);
+  }
+}
+
+/** Pindah scene OBS. Jika mode=revert, kembalikan ke scene sebelumnya setelah durasi detik. */
+async function obsSwitchScene(sceneName, mode, durationSec) {
+  if (obsState.status !== 'online') return;
+  try {
+    const prevScene = obsState.currentScene;
+    await obsSend('SetCurrentProgramScene', { sceneName });
+    obsState.currentScene = sceneName;
+    console.log('[obs] pindah scene → ' + sceneName);
+    if (mode === 'revert' && prevScene && prevScene !== sceneName && durationSec > 0) {
+      setTimeout(async () => {
+        try {
+          if (obsState.status === 'online') {
+            await obsSend('SetCurrentProgramScene', { sceneName: prevScene });
+            obsState.currentScene = prevScene;
+            console.log('[obs] revert scene → ' + prevScene);
+          }
+        } catch (e2) {
+          console.warn('[obs] gagal revert scene:', e2.message);
+        }
+      }, durationSec * 1000);
+    }
+  } catch (e) {
+    console.warn('[obs] gagal pindah scene:', e.message);
+  }
+}
+
+/**
+ * Aktifkan/matikan source di OBS.
+ * @param {string} sceneName - Nama scene tempat source berada.
+ * @param {string} sourceName - Nama source.
+ * @param {boolean} visible - true = tampilkan, false = sembunyikan.
+ */
+async function obsSetSourceVisible(sceneName, sourceName, visible) {
+  if (obsState.status !== 'online') return;
+  try {
+    // Cari sceneItemId dulu via GetSceneItemId
+    const idRes = await obsSend('GetSceneItemId', { sceneName, sourceName });
+    const sceneItemId = idRes && idRes.responseData ? idRes.responseData.sceneItemId : null;
+    if (sceneItemId == null) throw new Error('sceneItemId tidak ditemukan untuk "' + sourceName + '"');
+    await obsSend('SetSceneItemEnabled', { sceneName, sceneItemId, sceneItemEnabled: visible });
+    console.log('[obs] source "' + sourceName + '" di scene "' + sceneName + '" → ' + (visible ? 'tampil' : 'sembunyi'));
+  } catch (e) {
+    console.warn('[obs] gagal set source visible:', e.message);
+  }
+}
+
+function obsDisconnect() {
+  obsManualDisconnect = true;
+  if (obsReconnTimer) { clearTimeout(obsReconnTimer); obsReconnTimer = null; }
+  if (obsWs) {
+    try { obsWs.close(); } catch (_) {}
+    obsWs = null;
+  }
+  obsState.status = 'offline';
+  obsState.error = '';
+  broadcastObsState();
+}
+
+function obsConnect(ip, port, password) {
+  // Simpan config
+  obsState.ip       = ip;
+  obsState.port     = port;
+  obsState.password = password;
+  obsManualDisconnect = false;
+
+  // Putus koneksi lama
+  if (obsReconnTimer) { clearTimeout(obsReconnTimer); obsReconnTimer = null; }
+  if (obsWs) { try { obsWs.close(); } catch (_) {} obsWs = null; }
+
+  obsState.status = 'connecting';
+  obsState.error  = '';
+  obsState.scenes = [];
+  obsState.sources = {};
+  obsState.currentScene = '';
+  broadcastObsState();
+
+  const url = 'ws://' + ip + ':' + port;
+  let ws;
+  try {
+    ws = new NodeWebSocket(url);
+  } catch (e) {
+    obsState.status = 'error';
+    obsState.error  = e.message;
+    broadcastObsState();
+    return;
+  }
+  obsWs = ws;
+
+  ws.on('message', async (raw) => {
+    let msg;
+    try { msg = JSON.parse(raw.toString()); } catch (_) { return; }
+    const op = msg.op;
+    const d  = msg.d;
+
+    // op 0 = Hello (server kirim info autentikasi)
+    if (op === 0) {
+      if (d && d.authentication) {
+        // Autentikasi diperlukan
+        if (!password) {
+          obsState.status = 'error';
+          obsState.error  = 'OBS memerlukan password. Isi password di halaman Connection.';
+          if (obsWs === ws) obsWs = null;
+          ws.close();
+          broadcastObsState();
+          return;
+        }
+        // Hitung authentication string: base64(sha256(base64(sha256(password + salt)) + challenge))
+        const crypto = require('crypto');
+        const salt     = d.authentication.salt;
+        const challenge = d.authentication.challenge;
+        const secretBase = password + salt;
+        const secretHash = crypto.createHash('sha256').update(secretBase).digest('base64');
+        const authInput  = secretHash + challenge;
+        const authHash   = crypto.createHash('sha256').update(authInput).digest('base64');
+        ws.send(JSON.stringify({ op: 1, d: { rpcVersion: 1, authentication: authHash, eventSubscriptions: 1 | 4 } }));
+      } else {
+        // Tidak perlu autentikasi
+        ws.send(JSON.stringify({ op: 1, d: { rpcVersion: 1, eventSubscriptions: 1 | 4 } }));
+      }
+      return;
+    }
+
+    // op 2 = Identified (koneksi berhasil)
+    if (op === 2) {
+      obsState.status = 'online';
+      obsState.error  = '';
+      broadcastObsState();
+      console.log('[obs] terhubung ke ws://' + ip + ':' + port);
+      // Muat scenes dan sources secara async
+      await obsLoadScenes();
+      for (const sc of obsState.scenes) await obsLoadSources(sc);
+      broadcastObsState(); // kirim ulang dengan data scenes/sources
+      return;
+    }
+
+    // op 7 = RequestResponse
+    if (op === 7) {
+      const id = d && d.requestId;
+      if (id && obsCallbacks[id]) {
+        const cb = obsCallbacks[id];
+        delete obsCallbacks[id];
+        if (d.requestStatus && d.requestStatus.result === false) {
+          cb.reject(new Error(d.requestStatus.comment || 'OBS request gagal'));
+        } else {
+          cb.resolve(d);
+        }
+      }
+      return;
+    }
+
+    // op 5 = Event
+    if (op === 5) {
+      const evType = d && d.eventType;
+      if (evType === 'CurrentProgramSceneChanged' && d.eventData) {
+        obsState.currentScene = d.eventData.sceneName || '';
+        broadcastObsState();
+      }
+      if (evType === 'SceneListChanged') {
+        await obsLoadScenes();
+        for (const sc of obsState.scenes) await obsLoadSources(sc);
+        broadcastObsState();
+      }
+      if (evType === 'SceneItemCreated' || evType === 'SceneItemRemoved') {
+        const sc = d.eventData && d.eventData.sceneName;
+        if (sc) { await obsLoadSources(sc); broadcastObsState(); }
+      }
+    }
+  });
+
+  ws.on('close', () => {
+    if (obsWs !== ws) return;
+    obsWs = null;
+    // Reject semua pending callbacks
+    Object.keys(obsCallbacks).forEach((id) => {
+      obsCallbacks[id].reject(new Error('OBS WebSocket ditutup'));
+      delete obsCallbacks[id];
+    });
+    if (obsManualDisconnect) return;
+    if (obsState.status === 'online') {
+      obsState.status = 'error';
+      obsState.error  = 'Koneksi ke OBS terputus. Mencoba kembali…';
+      broadcastObsState();
+    }
+    // Auto-reconnect 5 detik
+    obsReconnTimer = setTimeout(() => {
+      obsReconnTimer = null;
+      if (!obsManualDisconnect) obsConnect(obsState.ip, obsState.port, obsState.password);
+    }, 5000);
+  });
+
+  ws.on('error', (e) => {
+    if (obsWs !== ws) return;
+    console.warn('[obs] error WebSocket:', e.message);
+    if (obsState.status === 'connecting') {
+      obsState.status = 'error';
+      obsState.error  = 'Tidak bisa terhubung ke OBS: ' + e.message;
+      broadcastObsState();
+    }
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -2459,6 +2834,116 @@ function handleRequest(req, res) {
 let activePort = BASE_PORT;
 
 /* ------------------------------------------------------------------ */
+/* Cloudflare Tunnel — auto-start saat server siap                     */
+/* ------------------------------------------------------------------ */
+let tunnelUrl    = '';   // URL tunnel aktif, misal https://xyz.trycloudflare.com
+let tunnelStatus = 'off'; // 'off' | 'starting' | 'online' | 'error'
+let tunnelError  = '';
+let tunnelProc   = null;
+
+function tunnelPayload() {
+  return { url: tunnelUrl, status: tunnelStatus, error: tunnelError };
+}
+
+function broadcastTunnel() {
+  broadcast('tunnelstate', tunnelPayload(), (c) => c.role === 'dashboard');
+}
+
+function startTunnel(port) {
+  if (tunnelProc) return; // sudah berjalan
+
+  // Cari cloudflared: 1) env CLOUDFLARED_PATH (dari Electron bundled), 2) PATH sistem
+  let cfBin = null;
+  if (process.env.CLOUDFLARED_PATH) {
+    try {
+      const r = spawnSync(process.env.CLOUDFLARED_PATH, ['--version'], { encoding: 'utf8' });
+      if (r.status === 0 || r.stdout || r.stderr) cfBin = process.env.CLOUDFLARED_PATH;
+    } catch (_) {}
+  }
+  if (!cfBin) {
+    try {
+      const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['cloudflared'], { encoding: 'utf8' });
+      if (!r.status && r.stdout.trim()) cfBin = 'cloudflared';
+    } catch (_) {}
+  }
+  if (!cfBin) {
+    tunnelStatus = 'error';
+    tunnelError  = 'cloudflared tidak ditemukan. Install cloudflared agar tunnel bisa aktif.';
+    console.warn('[tunnel] cloudflared tidak ditemukan — lewati.');
+    broadcastTunnel();
+    return;
+  }
+
+  tunnelStatus = 'starting';
+  tunnelUrl    = '';
+  tunnelError  = '';
+  broadcastTunnel();
+  console.log('[tunnel] memulai Cloudflare tunnel ke port ' + port + '...');
+
+  const proc = spawn(cfBin, ['tunnel', '--url', 'http://localhost:' + port], {
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  tunnelProc = proc;
+
+  const onLine = (line) => {
+    // URL ada di stderr, format: "https://xxx.trycloudflare.com"
+    const m = line.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
+    if (m) {
+      tunnelUrl    = m[0];
+      tunnelStatus = 'online';
+      tunnelError  = '';
+      broadcastTunnel();
+      console.log('[tunnel] aktif: ' + tunnelUrl);
+      // Print di banner setelah URL dapat
+      const tty = process.stdout.isTTY;
+      const col = (code, s) => (tty ? '\x1b[' + code + 'm' + s + '\x1b[0m' : s);
+      console.log('  Tunnel   : ' + col('1;35', tunnelUrl));
+      console.log('');
+    }
+  };
+
+  let stderrBuf = '';
+  proc.stderr.on('data', (d) => {
+    stderrBuf += d.toString();
+    const lines = stderrBuf.split('\n');
+    stderrBuf = lines.pop();
+    lines.forEach(onLine);
+  });
+
+  let stdoutBuf = '';
+  proc.stdout.on('data', (d) => {
+    stdoutBuf += d.toString();
+    const lines = stdoutBuf.split('\n');
+    stdoutBuf = lines.pop();
+    lines.forEach(onLine);
+  });
+
+  proc.on('exit', (code) => {
+    if (tunnelProc !== proc) return;
+    tunnelProc = null;
+    if (tunnelStatus === 'online') {
+      tunnelStatus = 'error';
+      tunnelError  = 'Tunnel terputus (kode ' + code + '). Restart server untuk mencoba lagi.';
+      tunnelUrl    = '';
+      broadcastTunnel();
+      console.warn('[tunnel] terputus, kode=' + code);
+    } else if (tunnelStatus === 'starting') {
+      tunnelStatus = 'error';
+      tunnelError  = 'Tunnel gagal dimulai (kode ' + code + ').';
+      broadcastTunnel();
+    }
+  });
+
+  proc.on('error', (e) => {
+    tunnelStatus = 'error';
+    tunnelError  = 'cloudflared error: ' + e.message;
+    tunnelProc   = null;
+    broadcastTunnel();
+    console.warn('[tunnel] error:', e.message);
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* Start                                                               */
 /* ------------------------------------------------------------------ */
 function banner(port) {
@@ -2470,6 +2955,7 @@ function banner(port) {
   console.log('  ' + c('2', '─────────────────────────────────────────'));
   console.log('  Dashboard: ' + c('1;32', 'http://localhost:' + port));
   lan.forEach((ip) => console.log('  Jaringan : ' + c('32', 'http://' + ip + ':' + port)));
+  if (tunnelUrl) console.log('  Tunnel   : ' + c('1;35', tunnelUrl));
   console.log('');
   console.log('  ' + c('2', 'Tekan Ctrl+C untuk berhenti.'));
   console.log('');
@@ -2524,6 +3010,8 @@ function startMainServer(port, retries) {
     server.removeListener('error', onError);
     activePort = port;
     banner(port);
+    // Auto-start Cloudflare tunnel setelah server siap
+    startTunnel(port);
   });
 }
 

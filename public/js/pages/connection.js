@@ -48,7 +48,8 @@ export default {
       '<div class="fgrp"><label class="lbl" for="obs-pass">Password <span class="opt">(opsional)</span></label>' +
       '<div class="field"><input id="obs-pass" type="password" autocomplete="off" placeholder="Kosongkan jika tidak memakai password" value="' + esc(obs.password) + '"></div></div>' +
       '<div class="row cn-actions">' +
-      '<button type="button" class="btn" id="obs-test">' + icon('radio') + 'Tes Koneksi</button>' +
+      '<button type="button" class="btn" id="obs-connect">' + icon('radio') + 'Sambungkan OBS</button>' +
+      '<button type="button" class="btn danger" id="obs-disconnect">' + icon('power') + 'Putuskan OBS</button>' +
       '<button type="button" class="btn primary" id="obs-save">' + icon('save') + 'Simpan</button></div>' +
       '<div class="cn-alert" id="obs-alert" aria-live="polite"></div>' +
       '<p class="hint">Ambil IP dan Port dari OBS: Tools → WebSocket Server Settings. Port bawaan OBS: 4455.</p>' +
@@ -142,17 +143,42 @@ export default {
       }
     }));
 
-    /* ---- OBS (session tetap di sini) ---- */
+    /* ---- OBS status dari Sync.obs (real-time dari server) ---- */
     const paintObs = () => {
-      const o = Session.get().obs.status;
+      const o = Sync.obs.status;
       $('#obs-chip', root).innerHTML =
-        o === 'online' ? '<span class="st on"><i></i>OBS tersambung</span>'
-        : o === 'testing' ? '<span class="st wait"><i></i>Menguji</span>'
+        o === 'online'      ? '<span class="st on"><i></i>OBS tersambung</span>'
+        : o === 'connecting' ? '<span class="st wait"><i></i>Menyambungkan…</span>'
+        : o === 'error'      ? '<span class="st off"><i></i>OBS error: ' + esc(Sync.obs.error || '') + '</span>'
         : '<span class="st off"><i></i>OBS belum tersambung</span>';
-      $('#obs-test', root).disabled = o === 'testing';
+      const connectBtn    = $('#obs-connect', root);
+      const disconnectBtn = $('#obs-disconnect', root);
+      if (connectBtn)    connectBtn.disabled    = o === 'connecting' || o === 'online';
+      if (disconnectBtn) disconnectBtn.disabled = o === 'offline';
     };
     paintObs();
-    d(Session.on(paintObs));
+    d(Sync.on('obsstate', () => {
+      paintObs();
+      const o = Sync.obs;
+      const obsBox = $('#obs-alert', root);
+      if (!obsBox) return;
+      if (o.status === 'online') {
+        obsBox.innerHTML = alertHTML('ok', 'OBS terhubung', 'Berhasil terhubung ke OBS di ws://' + esc(o.ip) + ':' + esc(o.port) + '.');
+        toast('OBS terhubung.', 'ok');
+      } else if (o.status === 'error') {
+        obsBox.innerHTML = alertHTML('err', 'OBS gagal terhubung', o.error || 'Tidak bisa terhubung ke OBS.');
+        toast('OBS error: ' + (o.error || ''), 'err');
+      } else if (o.status === 'offline') {
+        obsBox.innerHTML = alertHTML('warn', 'OBS terputus', 'Koneksi ke OBS diputus.');
+      }
+    }));
+
+    // Sinkronkan Session.obs untuk komponen topbar (tetap didukung untuk backward-compat)
+    const syncObsSession = () => {
+      Session.set({ obs: { status: Sync.obs.status === 'online' ? 'online' : Sync.obs.status === 'connecting' ? 'testing' : 'idle', detail: Sync.obs.ip + ':' + Sync.obs.port } });
+    };
+    syncObsSession();
+    d(Sync.on('obsstate', syncObsSession));
 
     /* ---- Tombol Connect ---- */
     const connect = async () => {
@@ -205,22 +231,30 @@ export default {
       return '';
     };
 
-    $('#obs-test', root).addEventListener('click', async () => {
+    $('#obs-connect', root).addEventListener('click', async () => {
       const v = readObs();
       const err = checkObs(v);
       if (err) { obsBox.innerHTML = alertHTML('err', 'Data belum benar', err); toast(err, 'err'); return; }
       obsBox.innerHTML = '';
-      Session.set({ obs: { status: 'testing', detail: '' } });
-      await new Promise((r) => setTimeout(r, 1100));
-      if (!alive) return;
-      if (v.port === '4455' || v.port === '4444') {
-        Session.set({ obs: { status: 'online', detail: v.ip + ':' + v.port } });
-        obsBox.innerHTML = alertHTML('ok', 'OBS terhubung', 'Berhasil terhubung ke OBS di ws://' + v.ip + ':' + v.port + '.');
-        toast('OBS terhubung.', 'ok');
-      } else {
-        Session.set({ obs: { status: 'offline', detail: '' } });
-        obsBox.innerHTML = alertHTML('err', 'OBS tidak terhubung', 'Tidak bisa terhubung ke ws://' + v.ip + ':' + v.port + '. Pastikan OBS terbuka dan WebSocket Server aktif.');
-        toast('OBS tidak terhubung.', 'err');
+      // Simpan config dulu ke localStorage agar bisa dibaca saat reload
+      Store.set('obs', v);
+      try {
+        await API.obsConnect(v.ip, v.port, v.password);
+        obsBox.innerHTML = alertHTML('info', 'Menyambungkan…', 'Menghubungkan ke OBS di ws://' + esc(v.ip) + ':' + esc(v.port) + '. Tunggu sebentar…');
+        toast('Menyambungkan ke OBS…', 'info');
+      } catch (e) {
+        const msg = e && e.message ? e.message : 'Gagal mengirim permintaan.';
+        obsBox.innerHTML = alertHTML('err', 'Gagal', msg);
+        toast(msg, 'err');
+      }
+    });
+
+    $('#obs-disconnect', root).addEventListener('click', async () => {
+      try {
+        await API.obsDisconnect();
+        toast('OBS diputus.', 'info');
+      } catch (e) {
+        toast('Gagal putus OBS: ' + (e && e.message || ''), 'err');
       }
     });
 

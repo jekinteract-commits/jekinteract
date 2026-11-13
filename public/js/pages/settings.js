@@ -24,11 +24,18 @@ export default {
       '</section>' +
 
       '<section class="panel">' +
-      '<div class="fh"><div class="fh-t"><h2>Alamat Server</h2><div class="sub">Dipakai pada link overlay yang disalin.</div></div></div>' +
+      '<div class="fh"><div class="fh-t"><h2>Cloudflare Tunnel</h2><div class="sub">URL publik untuk link overlay — wajib untuk TikTok Live Studio.</div></div>' +
+      '<span id="st-tun-chip"></span></div>' +
+      '<div id="st-tun-info"></div>' +
+      '<p class="hint">Tunnel otomatis aktif saat server berjalan. Semua link overlay otomatis memakai URL tunnel ini. Jika tunnel belum aktif, tunggu beberapa detik atau pastikan <code>cloudflared</code> terinstall.</p>' +
+      '</section>' +
+
+      '<section class="panel">' +
+      '<div class="fh"><div class="fh-t"><h2>Alamat Server</h2><div class="sub">Override manual alamat yang dipakai di link overlay.</div></div></div>' +
       '<div class="addrs" id="st-addrs"><span class="muted">Mendeteksi alamat...</span></div>' +
-      '<div class="fgrp"><label class="lbl" for="st-base">Alamat dasar link overlay <span class="opt">(opsional)</span></label>' +
+      '<div class="fgrp"><label class="lbl" for="st-base">Override alamat link overlay <span class="opt">(opsional)</span></label>' +
       '<div class="field"><input id="st-base" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="http://192.168.1.5:3000" value="' + esc(s.baseUrl) + '"></div>' +
-      '<p class="hint">Isi dengan IP jaringan jika overlay dibuka dari perangkat lain, misalnya OBS di PC. Kosongkan untuk memakai alamat yang sedang dibuka: <b id="st-cur"></b></p></div>' +
+      '<p class="hint">Kosongkan agar link overlay otomatis memakai URL tunnel Cloudflare (jika aktif). Isi hanya jika ingin override manual ke IP jaringan. Aktif: <b id="st-cur"></b></p></div>' +
       '<div class="row"><button type="button" class="btn primary" id="st-base-save">' + icon('save') + 'Simpan</button></div>' +
       '</section>' +
 
@@ -42,6 +49,50 @@ export default {
 
   mount(root) {
     const d = disposer();
+
+    /* ---- tunnel status ---- */
+    const paintTunnel = () => {
+      const t = Sync.tunnel;
+      const chip = $('#st-tun-chip', root);
+      const info = $('#st-tun-info', root);
+      if (!chip || !info) return;
+
+      if (t.status === 'online') {
+        chip.innerHTML = '<span class="st on"><i></i>Tunnel aktif</span>';
+        info.innerHTML =
+          '<div class="fgrp"><label class="lbl">URL Tunnel (pakai di TikTok Live Studio)</label>' +
+          '<div class="field ro"><input type="text" readonly value="' + esc(t.url) + '" aria-label="URL Tunnel" data-link></div>' +
+          '<button type="button" class="btn sm" id="st-tun-copy">' + icon('copy') + 'Salin URL</button></div>' +
+          '<p class="hint">Semua link overlay otomatis memakai URL ini. Contoh Screen 1: <b>' + esc(t.url) + '/overlay/screen/1</b></p>';
+        const copyBtn = $('#st-tun-copy', root);
+        if (copyBtn) {
+          copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(t.url).then(() => toast('URL tunnel disalin.', 'ok')).catch(() => {
+              const inp = info.querySelector('input[data-link]');
+              if (inp) { inp.select(); document.execCommand('copy'); toast('URL tunnel disalin.', 'ok'); }
+            });
+          });
+        }
+      } else if (t.status === 'starting') {
+        chip.innerHTML = '<span class="st wait"><i></i>Tunnel sedang dimulai…</span>';
+        info.innerHTML = '<p class="dim">Cloudflare tunnel sedang dimulai, biasanya 5-10 detik. Tunggu sebentar…</p>';
+      } else if (t.status === 'error') {
+        chip.innerHTML = '<span class="st off"><i></i>Tunnel error</span>';
+        info.innerHTML = '<p class="dim">' + esc(t.error || 'Tunnel tidak aktif.') + '</p>';
+      } else {
+        chip.innerHTML = '<span class="st off"><i></i>Tunnel tidak aktif</span>';
+        info.innerHTML = '<p class="dim">Tunnel belum aktif. Link overlay memakai alamat lokal.</p>';
+      }
+    };
+    paintTunnel();
+    d(Sync.on('tunnelstate', paintTunnel));
+
+    // Fetch tunnel status saat mount (fix: SSE bisa terlambat)
+    API.tunnelStatus().then((t) => {
+      if (!t) return;
+      Sync.tunnel = t;
+      paintTunnel();
+    }).catch(() => {});
 
     /* ---- antrean screen ---- */
     const paintQ = () => {

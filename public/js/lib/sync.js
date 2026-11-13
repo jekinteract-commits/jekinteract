@@ -1,4 +1,9 @@
 /* Sinkronisasi real-time dengan server (WebSocket) + helper API. */
+import { setTunnelUrl, initElectronTunnel } from './store.js';
+
+// Inisialisasi IPC tunnel URL dari Electron (no-op jika bukan di Electron)
+initElectronTunnel();
+
 const listeners = {};
 const cid = Math.random().toString(36).slice(2, 10);
 
@@ -8,6 +13,8 @@ export const Sync = {
   recv: {}, // timestamp (ms) saat state tiap key diterima dari server
   status: { overlays: {}, queues: {} },
   tiktok: { state: 'offline', username: '', error: '', available: false },
+  obs: { status: 'offline', ip: '127.0.0.1', port: '4455', error: '', scenes: [], sources: {}, currentScene: '' },
+  tunnel: { url: '', status: 'off', error: '' },
   likeLeaderboard: [], // [{id, nickname, avatarUrl, count}] realtime dari server
   giftLeaderboard: [], // [{id, nickname, avatarUrl, count}] realtime dari server
   liveStats: { current: null, sessions: [] }, // statistik sesi live asli dari server
@@ -96,6 +103,8 @@ export const Sync = {
           const wasOffline = !Sync.online;
           Sync.online = true;
           Sync._hello = d;
+          if (d.obsstate) Sync.obs = d.obsstate;
+          if (d.tunnel) { Sync.tunnel = d.tunnel; setTunnelUrl(d.tunnel.url); }
           if (!resolved) {
             resolved = true;
             resolve(true);
@@ -107,6 +116,8 @@ export const Sync = {
             if (d.giftLeaderboard) Sync.emit('giftleaderboard', d.giftLeaderboard);
             if (d.liveStats) Sync.emit('livestats', d.liveStats);
             if (d.musicstate) Sync.emit('musicstate', d.musicstate);
+            if (d.obsstate) Sync.emit('obsstate', d.obsstate);
+            if (d.tunnel) Sync.emit('tunnelstate', d.tunnel);
             Sync.emit('online', true);
             Sync.emit('state', { key: '*' });
             Sync.emit('status', Sync.status);
@@ -165,6 +176,21 @@ export const Sync = {
         if (event === 'musicskip') {
           if (!d) return;
           Sync.emit('musicskip', d);
+          return;
+        }
+
+        if (event === 'obsstate') {
+          if (!d) return;
+          Sync.obs = d;
+          Sync.emit('obsstate', d);
+          return;
+        }
+
+        if (event === 'tunnelstate') {
+          if (!d) return;
+          Sync.tunnel = d;
+          setTunnelUrl(d.url);
+          Sync.emit('tunnelstate', d);
           return;
         }
 
@@ -340,6 +366,25 @@ export const API = {
   }),
   musicSearch: (q) => json('/api/music/search?' + new URLSearchParams({ q })),
   musicClear: () => json('/api/music/clear', { method: 'POST' }),
+
+  /* ----- Tunnel ----- */
+  tunnelStatus: () => json('/api/tunnel/status'),
+
+  /* ----- OBS ----- */
+  obsConnect: (ip, port, password) => json('/api/obs/connect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ip, port, password })
+  }),
+  obsDisconnect: () => json('/api/obs/disconnect', { method: 'POST' }),
+  obsStatus: () => json('/api/obs/status'),
+  obsScenes: () => json('/api/obs/scenes'),
+  obsSources: (scene) => json('/api/obs/sources' + (scene ? '?' + new URLSearchParams({ scene }) : '')),
+  obsCommand: (payload) => json('/api/obs/command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }),
 
   /** Upload file ke server (data/uploads). onProgress menerima 0..1. */
   upload(file, onProgress) {

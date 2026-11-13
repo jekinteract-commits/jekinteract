@@ -50,7 +50,13 @@
       "!**/*.bak*",
       "!server.js.Sebelum*"
     ],
-    "extraResources": [],
+    "extraResources": [
+      {
+        "from": "resources/cloudflared/",
+        "to": "cloudflared/",
+        "filter": ["**/*"]
+      }
+    ],
     "win": {
       "target": [
         {

@@ -1,43 +1,65 @@
-name: Build Windows .exe
+name: Build Windows EXE
 
 on:
-  # Jalankan otomatis setiap push ke branch main/master
   push:
-    branches: [main, master]
-  # Atau jalankan manual dari tab Actions di GitHub
-  workflow_dispatch:
+    tags:
+      - 'v*'          # trigger saat push tag, misal: git tag v1.0.0 && git push --tags
+  workflow_dispatch:  # bisa juga trigger manual dari tab Actions di GitHub
+
+permissions:
+  contents: write   # diperlukan untuk upload ke GitHub Release
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout kode
+      # 1. Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
+      # 3. Install dependencies (skip optional nut-tree yang butuh native build)
       - name: Install dependencies
-        run: npm install --ignore-scripts
+        run: npm ci --ignore-scripts
 
-      - name: Build .exe installer
+      # 4. Download cloudflared.exe dari Cloudflare releases
+      - name: Download cloudflared.exe
+        shell: pwsh
+        run: |
+          $version = "latest"
+          $url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+          New-Item -ItemType Directory -Force -Path "resources/cloudflared"
+          Invoke-WebRequest -Uri $url -OutFile "resources/cloudflared/cloudflared.exe"
+          Write-Host "cloudflared.exe downloaded:"
+          (Get-Item "resources/cloudflared/cloudflared.exe").Length
+
+      # 5. Build .exe dengan electron-builder
+      - name: Build Electron app
         run: npm run build:win
         env:
-          # Nonaktifkan code signing (tidak perlu sertifikat berbayar)
-          CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload hasil build
+      # 6. Upload artifact (tersedia di tab Actions > Artifacts)
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: JekInteract-Windows
-          # Upload semua file di folder dist (installer + unpacked)
-          path: |
-            dist/*.exe
-            dist/*.zip
-          if-no-files-found: error
+          name: JekInteract-Windows-x64
+          path: dist/*.exe
           retention-days: 30
+
+      # 7. Jika ada tag → buat GitHub Release dan upload exe
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

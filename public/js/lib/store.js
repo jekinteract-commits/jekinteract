@@ -58,11 +58,34 @@ export const DEFAULTS = {
   subathon: { value: 1, unit: 'h', per: { coin: 0, subscribe: 0, follow: 0, share: 0, like: 0, comment: 0 } }
 };
 
-/** Alamat dasar untuk link overlay (bisa diganti di Pengaturan, misal IP jaringan). */
+/** Tunnel URL aktif dari server (di-set oleh sync.js saat dapat tunnelstate). */
+let _tunnelUrl = '';
+export function setTunnelUrl(url) { _tunnelUrl = url || ''; }
+export function getTunnelUrl()    { return _tunnelUrl; }
+
+/** Inisialisasi tunnel URL dari Electron IPC (jika berjalan di dalam Electron).
+ *  Dipanggil sekali saat app.js / sync.js load. */
+export function initElectronTunnel() {
+  if (typeof window === 'undefined' || !window.__electronBridge__) return;
+  // Ambil URL yang sudah ada di main process (sinkron via invoke)
+  window.__electronBridge__.getTunnelUrl().then((url) => {
+    if (url) setTunnelUrl(url);
+  }).catch(() => {});
+  // Dengarkan perubahan tunnel URL dari main process
+  window.__electronBridge__.onTunnelUrl((url) => {
+    setTunnelUrl(url);
+  });
+}
+
+/** Alamat dasar untuk link overlay.
+ *  Prioritas: baseUrl manual (jika diisi) → tunnel URL aktif → location.origin
+ */
 export function baseUrl() {
   const s = Store.get('settings', DEFAULTS.settings) || {};
   const b = String(s.baseUrl || '').trim().replace(/\/+$/, '');
-  return b || location.origin;
+  if (b) return b;
+  if (_tunnelUrl) return _tunnelUrl;
+  return location.origin;
 }
 
 /* ---------- Sesi (dalam memori; hilang saat halaman di-refresh) ---------- */

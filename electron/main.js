@@ -6,11 +6,13 @@
  * Alur:
  *  1. Jalankan server.js sebagai child process (Node.js fork)
  *  2. Tunggu server siap (cek HTTP /api/info)
- *  3. Buka BrowserWindow yang load http://localhost:<port>
- *  4. Saat window ditutup → matikan server child process
+ *  3. Polling tunnel URL dari /api/tunnel/status hingga online (maks 60 detik)
+ *  4. Buka BrowserWindow yang load http://localhost:<port>
+ *  5. Inject tunnel URL ke renderer via IPC agar overlay links pakai URL Cloudflare
+ *  6. Saat window ditutup → matikan server child process
  */
 
-const { app, BrowserWindow, shell, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } = require('electron');
 const { fork } = require('child_process');
 const path = require('path');
 const http = require('http');
@@ -32,13 +34,24 @@ let mainWindow = null;
 let tray = null;
 let serverPort = 3000;
 let serverReady = false;
+let tunnelUrl = '';
 
 // ── Jalankan server Node.js ───────────────────────────────────────────────────
 function startServer() {
   return new Promise((resolve, reject) => {
+    // Lokasi cloudflared yang dibundel saat build (.exe)
+    const cfBundled = isPackaged
+      ? path.join(process.resourcesPath, 'cloudflared', process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared')
+      : null;
+
+    const env = Object.assign({}, process.env, { ELECTRON: '1' });
+    if (cfBundled && fs.existsSync(cfBundled)) {
+      env.CLOUDFLARED_PATH = cfBundled;
+    }
+
     serverProcess = fork(SERVER_JS, [], {
       cwd: ROOT,
-      env: Object.assign({}, process.env, { ELECTRON: '1' }),
+      env,
       stdio: ['ignore', 'pipe', 'pipe', 'ipc']
     });
 
@@ -102,6 +115,62 @@ function startServer() {
   });
 }
 
+// ── Polling tunnel URL hingga online ─────────────────────────────────────────
+/**
+ * Poll /api/tunnel/status sampai status 'online' atau timeout.
+ * Mengembalikan tunnel URL jika berhasil, atau '' jika timeout/error.
+ */
+function waitForTunnel(port) {
+  return new Promise((resolve) => {
+    const TUNNEL_TIMEOUT = 60000; // 60 detik
+    const TUNNEL_INTERVAL = 1000;
+    const start = Date.now();
+
+    function poll() {
+      http.get('http://127.0.0.1:' + port + '/api/tunnel/status', (res) => {
+        let body = '';
+        res.on('data', (c) => { body += c; });
+        res.on('end', () => {
+          try {
+            const t = JSON.parse(body);
+            if (t.status === 'online' && t.url) {
+              console.log('[electron] tunnel online:', t.url);
+              resolve(t.url);
+              return;
+            }
+            if (t.status === 'error') {
+              console.warn('[electron] tunnel error:', t.error);
+              resolve('');
+              return;
+            }
+          } catch (_) {}
+          if (Date.now() - start > TUNNEL_TIMEOUT) {
+            console.warn('[electron] tunnel timeout — lanjut tanpa tunnel URL');
+            resolve('');
+            return;
+          }
+          setTimeout(poll, TUNNEL_INTERVAL);
+        });
+      }).on('error', () => {
+        if (Date.now() - start > TUNNEL_TIMEOUT) {
+          resolve('');
+          return;
+        }
+        setTimeout(poll, TUNNEL_INTERVAL);
+      });
+    }
+
+    poll();
+  });
+}
+
+// ── Inject tunnel URL ke semua renderer ──────────────────────────────────────
+function injectTunnelUrl(url) {
+  tunnelUrl = url || '';
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('tunnel-url', tunnelUrl);
+}
+
 // ── Buat window utama ─────────────────────────────────────────────────────────
 function createWindow(port) {
   mainWindow = new BrowserWindow({
@@ -127,6 +196,13 @@ function createWindow(port) {
   // Tampilkan window setelah selesai load (hindari flash putih)
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    // Inject tunnel URL saat window pertama kali tampil
+    if (tunnelUrl) injectTunnelUrl(tunnelUrl);
+  });
+
+  // Setiap kali halaman selesai load (navigasi/reload), inject ulang tunnel URL
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (tunnelUrl) injectTunnelUrl(tunnelUrl);
   });
 
   // Link eksternal buka di browser sistem, bukan di window Electron
@@ -184,6 +260,10 @@ function createTray(port) {
   });
 }
 
+// ── IPC handlers ─────────────────────────────────────────────────────────────
+// Renderer bisa minta tunnel URL kapanpun (misal setelah reload)
+ipcMain.handle('get-tunnel-url', () => tunnelUrl);
+
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   // Single instance — jika sudah ada yang jalan, fokus ke window yang ada
@@ -204,13 +284,24 @@ app.whenReady().then(async () => {
     console.log('[electron] menjalankan server...');
     const port = await startServer();
     console.log('[electron] server siap di port', port);
+
+    // Buka window segera — tidak perlu tunggu tunnel
     createWindow(port);
     createTray(port);
+
+    // Tunggu tunnel URL di background, inject ke renderer saat dapat
+    console.log('[electron] menunggu tunnel Cloudflare...');
+    const url = await waitForTunnel(port);
+    if (url) {
+      injectTunnelUrl(url);
+    } else {
+      console.warn('[electron] cloudflared tidak aktif — overlay links pakai localhost');
+    }
   } catch (e) {
     console.error('[electron] gagal start server:', e.message);
     // Tampilkan dialog error
     const { dialog } = require('electron');
-    dialog.showErrorBox('JekInteract - Gagal Start', 
+    dialog.showErrorBox('JekInteract - Gagal Start',
       'Server tidak bisa dijalankan:\n\n' + e.message + '\n\nPastikan port 3000 tidak dipakai aplikasi lain.');
     app.quit();
   }

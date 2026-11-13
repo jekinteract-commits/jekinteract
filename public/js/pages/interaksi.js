@@ -364,8 +364,30 @@ async function testPlay(it) {
       toast('Keystroke error: ' + e.message, 'err');
     }
   }
-  if (it.triggers.obsScene) toast('Simulasi pindah scene OBS ke "' + it.obs.scene + '" (belum terhubung ke OBS).', 'info', 4200);
-  if (it.triggers.obsSource) toast('Simulasi aktifkan source "' + it.obs.source + '" (belum terhubung ke OBS).', 'info', 4200);
+  if (it.triggers.obsScene && it.obs && it.obs.scene) {
+    if (Sync.obs && Sync.obs.status === 'online') {
+      try {
+        await API.obsCommand({ type: 'scene', scene: it.obs.scene, mode: it.obs.mode || 'revert', duration: it.duration || 10 });
+        toast('OBS: pindah scene → "' + it.obs.scene + '"', 'ok', 3500);
+      } catch (e) {
+        toast('OBS scene gagal: ' + e.message, 'err');
+      }
+    } else {
+      toast('Simulasi pindah scene OBS ke "' + it.obs.scene + '" (OBS belum terhubung).', 'info', 4200);
+    }
+  }
+  if (it.triggers.obsSource && it.obs && it.obs.source) {
+    if (Sync.obs && Sync.obs.status === 'online') {
+      try {
+        await API.obsCommand({ type: 'source', srcScene: it.obs.srcScene || '', source: it.obs.source, srcOff: it.obs.srcOff !== false, duration: it.duration || 10 });
+        toast('OBS: aktifkan source "' + it.obs.source + '"', 'ok', 3500);
+      } catch (e) {
+        toast('OBS source gagal: ' + e.message, 'err');
+      }
+    } else {
+      toast('Simulasi aktifkan source "' + it.obs.source + '" (OBS belum terhubung).', 'info', 4200);
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -436,19 +458,30 @@ function triggerBlockHTML(t, d) {
   } else if (t.k === 'keystroke') {
     body = '<button type="button" class="btn sm" data-pick-keys>' + icon('keyboard') + 'Pilih Keystroke/Hotkey</button><div class="up-info" data-info-keys></div>';
   } else if (t.k === 'obsScene') {
+    const obsConnected = Sync.obs && Sync.obs.status === 'online';
+    const sceneList = obsConnected && Sync.obs.scenes && Sync.obs.scenes.length ? Sync.obs.scenes : OBS_SCENES;
+    const sceneHint = obsConnected
+      ? '<p class="hint" id="if-scene-hint">Diambil dari OBS (' + sceneList.length + ' scene). Scene aktif: ' + esc(Sync.obs.currentScene || '-') + '</p>'
+      : '<p class="hint" id="if-scene-hint">Hubungkan OBS di halaman Connection terlebih dahulu agar daftar scene muncul secara otomatis.</p>';
     body =
       '<div class="fgrp"><label class="lbl" for="if-scene">Pilih Scene</label>' +
-      '<div class="field sel"><select id="if-scene">' + OBS_SCENES.map((s) => '<option' + (s === d.obs.scene ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></div>' +
-      '<p class="hint">Daftar scene diambil dari OBS setelah tersambung. Sementara ini contoh.</p></div>' +
+      '<div class="field sel"><select id="if-scene">' + sceneList.map((s) => '<option' + (s === d.obs.scene ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></div>' +
+      sceneHint + '</div>' +
       '<div class="fgrp"><span class="lbl">Mode Scene</span>' +
       '<label class="choice"><input type="radio" name="scmode" value="revert"' + (d.obs.mode === 'revert' ? ' checked' : '') + '><i></i><span class="t"><b>Beralih ke scene sebelumnya</b><span>Kembali setelah durasi screen interaksi telah berakhir.</span></span></label>' +
       '<label class="choice"><input type="radio" name="scmode" value="stay"' + (d.obs.mode === 'stay' ? ' checked' : '') + '><i></i><span class="t"><b>Tetap berada di scene</b><span>Tetap di scene tersebut secara permanen.</span></span></label></div>';
   } else {
+    const obsConnected = Sync.obs && Sync.obs.status === 'online';
+    const sceneList = obsConnected && Sync.obs.scenes && Sync.obs.scenes.length ? Sync.obs.scenes : OBS_SCENES;
+    const srcScene = d.obs.srcScene || (sceneList[0] || '');
+    const sourceList = obsConnected && Sync.obs.sources && Sync.obs.sources[srcScene] && Sync.obs.sources[srcScene].length
+      ? Sync.obs.sources[srcScene] : OBS_SOURCES;
     body =
       '<div class="g2"><div class="fgrp"><label class="lbl" for="if-srcscene">Scene</label>' +
-      '<div class="field sel"><select id="if-srcscene">' + OBS_SCENES.map((s) => '<option' + (s === d.obs.srcScene ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></div></div>' +
+      '<div class="field sel"><select id="if-srcscene">' + sceneList.map((s) => '<option' + (s === d.obs.srcScene ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></div></div>' +
       '<div class="fgrp"><label class="lbl" for="if-source">Source</label>' +
-      '<div class="field sel"><select id="if-source">' + OBS_SOURCES.map((s) => '<option' + (s === d.obs.source ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></div></div></div>' +
+      '<div class="field sel"><select id="if-source">' + sourceList.map((s) => '<option' + (s === d.obs.source ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></div></div></div>' +
+      (obsConnected ? '<p class="hint">Source dari OBS untuk scene "' + esc(srcScene) + '". Pilih scene lain untuk memuat ulang source-nya.</p>' : '<p class="hint">Hubungkan OBS di halaman Connection agar daftar source muncul secara otomatis.</p>') +
       '<label class="chk"><input type="checkbox" id="if-srcoff"' + (d.obs.srcOff ? ' checked' : '') + '><i></i><span class="t"><b>Matikan source setelah durasi berakhir</b><span>Jika tidak dicentang, source tetap menyala.</span></span></label>';
   }
   return (
@@ -558,6 +591,24 @@ function openInteractionForm(existing, onSave) {
         data.keystrokes = lines;
         refreshKeys();
       });
+    }
+  });
+
+  /* reload sources saat scene untuk obsSource berubah */
+  m.body.addEventListener('change', async (e) => {
+    const sel = e.target.closest('#if-srcscene');
+    if (sel && Sync.obs && Sync.obs.status === 'online') {
+      const sc = sel.value;
+      try {
+        const r = await API.obsSources(sc);
+        if (r && r.sources && r.sources.length) {
+          const sourceEl = m.$('#if-source');
+          if (sourceEl) {
+            const cur = sourceEl.value;
+            sourceEl.innerHTML = r.sources.map((s) => '<option' + (s === cur ? ' selected' : '') + '>' + esc(s) + '</option>').join('');
+          }
+        }
+      } catch (_) {}
     }
   });
 
