@@ -57,14 +57,11 @@
           "target": "nsis",
           "arch": ["x64"]
         }
-      ],
-      "icon": "public/assets/logo.svg"
+      ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "public/assets/logo.svg",
-      "uninstallerIcon": "public/assets/logo.svg",
       "shortcutName": "JekInteract",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true

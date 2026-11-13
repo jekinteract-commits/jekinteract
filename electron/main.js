@@ -110,7 +110,6 @@ function createWindow(port) {
     minWidth: 900,
     minHeight: 600,
     title: 'JekInteract',
-    icon: path.join(ROOT, 'public', 'assets', 'logo.svg'),
     backgroundColor: '#0f172a',
     show: false, // tampil setelah konten siap
     webPreferences: {
@@ -150,17 +149,7 @@ function createWindow(port) {
 
 // ── Tray icon ─────────────────────────────────────────────────────────────────
 function createTray(port) {
-  const iconPath = path.join(ROOT, 'public', 'assets', 'logo.svg');
-  let icon;
-  try {
-    icon = nativeImage.createFromPath(iconPath);
-    // Skala icon ke ukuran tray yang wajar
-    if (!icon.isEmpty()) icon = icon.resize({ width: 16, height: 16 });
-  } catch (_) {
-    icon = nativeImage.createEmpty();
-  }
-
-  tray = new Tray(icon);
+  tray = new Tray(nativeImage.createEmpty());
   tray.setToolTip('JekInteract — port ' + port);
 
   const menu = Menu.buildFromTemplate([
