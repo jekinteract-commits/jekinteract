@@ -1,0 +1,43 @@
+name: Build Windows .exe
+
+on:
+  # Jalankan otomatis setiap push ke branch main/master
+  push:
+    branches: [main, master]
+  # Atau jalankan manual dari tab Actions di GitHub
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout kode
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build .exe installer
+        run: npm run build:win
+        env:
+          # Nonaktifkan code signing (tidak perlu sertifikat berbayar)
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload hasil build
+        uses: actions/upload-artifact@v4
+        with:
+          name: JekInteract-Windows
+          # Upload semua file di folder dist (installer + unpacked)
+          path: |
+            dist/*.exe
+            dist/*.zip
+          if-no-files-found: error
+          retention-days: 30

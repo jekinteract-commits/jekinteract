@@ -1,0 +1,77 @@
+{
+  "name": "jekinteract",
+  "version": "0.1.0",
+  "description": "JekInteract - tools interaksi TikTok Live (fase UI). Tanpa dependency, jalankan dengan npm start.",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "tunnel": "cloudflared tunnel --url http://localhost:3000",
+    "electron": "electron .",
+    "electron:dev": "electron . --inspect",
+    "build:win": "electron-builder --win --x64",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "msedge-tts": "^2.1.1",
+    "selfsigned": "^5.5.0",
+    "tiktok-live-connector": "^2.5.0",
+    "ws": "^8.23.0"
+  },
+  "optionalDependencies": {
+    "@nut-tree/nut-js": "^4.0.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.jekinteract.app",
+    "productName": "JekInteract",
+    "copyright": "Copyright © 2024",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "server.js",
+      "public/**/*",
+      "data/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "!node_modules/electron/**",
+      "!node_modules/electron-builder/**",
+      "!public/**/*.bak",
+      "!**/*.bak",
+      "!**/*.bak*",
+      "!server.js.Sebelum*"
+    ],
+    "extraResources": [],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "public/assets/logo.svg"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/assets/logo.svg",
+      "uninstallerIcon": "public/assets/logo.svg",
+      "shortcutName": "JekInteract",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "nodeGypRebuild": false,
+    "npmRebuild": true,
+    "electronVersion": "31.0.0"
+  }
+}

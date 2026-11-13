@@ -1,0 +1,109 @@
+/* ==========================================================================
+   JekInteract — theme.css
+   Token desain + bentuk dasar. Dipakai dashboard dan overlay.
+   Bahasa bentuk: sudut kiri-atas & kanan-bawah dipotong (chamfer) = HUD arcade.
+   ========================================================================== */
+:root {
+  color-scheme: dark;
+
+  /* permukaan */
+  --void: #07050f;
+  --ink-0: #0a0818;
+  --ink-1: #0f0b22;
+  --ink-2: #17123a;
+  --ink-3: #221b52;
+  --line: #2b2358;
+  --line-2: #3d3380;
+
+  /* teks */
+  --txt: #edebff;
+  --txt-2: #b4afdc;
+  --txt-3: #7d78ab;
+
+  /* sinyal — dipakai hemat, tiap warna punya makna */
+  --cyan: #29f3ff;   /* interaktif / aktif */
+  --mag: #ff2d8f;    /* like, energi, bahaya ringan */
+  --amber: #ffc93c;  /* koin, peringkat 1 */
+  --mint: #39ff9a;   /* online, berhasil */
+  --red: #ff3d5e;    /* offline, hapus */
+  --violet: #8b5cff;
+
+  --brand: linear-gradient(120deg, #29f3ff 0%, #8b5cff 55%, #ff2d8f 100%);
+
+  --violet-t: #b9a0ff;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+
+  --f-display: "Orbitron", "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --f-ui: "Chakra Petch", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+
+  --ease: cubic-bezier(.2, .7, .2, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  color: var(--txt);
+  font: 500 15px/1.5 var(--f-ui);
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4, p, dl, dd, figure { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+img, svg { display: block; }
+img.scr-media { max-width: none; }
+a { color: var(--cyan); text-decoration: none; }
+[hidden] { display: none !important; }
+
+* { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+::selection { background: rgba(41, 243, 255, .28); }
+
+/* ---------- Bentuk "cut": bingkai bergaris dengan sudut dipotong ----------
+   Garis (--bd) digambar sebagai latar elemen, isi (--bg) sebagai ::before
+   yang dipotong sedikit lebih kecil. Atur lewat variabel --c, --bw, --bd, --bg. */
+.cut, .panel, .btn, .field, .chip, .mcard, .toast, .alert, .itm, .act, .gift, .key, .sc-frame {
+  --c: 12px;
+  --bw: 1px;
+  --bd: var(--line);
+  --bg: var(--ink-1);
+  --ci: calc(var(--c) - var(--bw) * .586);
+  position: relative;
+  isolation: isolate;
+  background: var(--bd);
+  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+}
+.cut::before, .panel::before, .btn::before, .field::before, .chip::before, .mcard::before,
+.toast::before, .alert::before, .itm::before, .act::before, .gift::before, .key::before, .sc-frame::before {
+  content: "";
+  position: absolute;
+  inset: var(--bw);
+  z-index: -1;
+  background: var(--bg);
+  clip-path: polygon(var(--ci) 0, 100% 0, 100% calc(100% - var(--ci)), calc(100% - var(--ci)) 100%, 0 100%, 0 var(--ci));
+}
+
+/* ---------- Avatar ---------- */
+.av {
+  display: inline-block;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--ink-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* hanya terapkan ke elemen UI dashboard, bukan overlay screen */
+  *:not(.scr-media), *:not(.scr-media)::before, *:not(.scr-media)::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

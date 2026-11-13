@@ -1,0 +1,9 @@
+node_modules/
+data/
+dist/
+*.log
+# File backup
+*.bak
+*.bak*
+server.js.Sebelum*
+public/js/pages/interaksi.js.Sebelum*

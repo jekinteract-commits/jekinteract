@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <linearGradient id="edge" x1="3" y1="3" x2="61" y2="61" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#29f3ff"/>
+      <stop offset=".55" stop-color="#8b5cff"/>
+      <stop offset="1" stop-color="#ff2d8f"/>
+    </linearGradient>
+    <linearGradient id="fill" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1a1340"/>
+      <stop offset="1" stop-color="#090716"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="15" y1="0" x2="51" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#29f3ff"/>
+      <stop offset="1" stop-color="#ff2d8f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- bingkai: sudut kiri-atas dan kanan-bawah dipotong -->
+  <path d="M16 3H61V48L48 61H3V16Z" fill="url(#fill)" stroke="url(#edge)" stroke-width="2.4" stroke-linejoin="miter"/>
+
+  <!-- huruf J + I, tiga lapis untuk efek offset kromatik -->
+  <g fill="#ff2d8f" transform="translate(1.6 1)">
+    <path d="M27 15H36V38L28 46H15V37H22L27 32Z"/>
+    <path d="M42 15H51V46H42Z"/>
+  </g>
+  <g fill="#29f3ff" transform="translate(-1.6 -1)">
+    <path d="M27 15H36V38L28 46H15V37H22L27 32Z"/>
+    <path d="M42 15H51V46H42Z"/>
+  </g>
+  <g fill="#ffffff">
+    <path d="M27 15H36V38L28 46H15V37H22L27 32Z"/>
+    <path d="M42 15H51V46H42Z"/>
+  </g>
+
+  <!-- bar energi di bawah huruf -->
+  <rect x="15" y="50" width="36" height="2.2" fill="url(#bar)"/>
+</svg>
