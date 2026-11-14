@@ -61,17 +61,10 @@
     "win": {
       "target": [
         {
-          "target": "nsis",
+          "target": "portable",
           "arch": ["x64"]
         }
       ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "shortcutName": "JekInteract",
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
     },
     "nodeGypRebuild": false,
     "npmRebuild": true,
