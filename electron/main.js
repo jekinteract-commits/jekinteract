@@ -12,7 +12,7 @@
  *  6. Saat app quit → server otomatis mati (sama process)
  */
 
-const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -111,6 +111,51 @@ let tray = null;
 let serverPort = 3000;
 let serverReady = false;
 let tunnelUrl = '';
+
+// ── Hotkey global Win/Lose (Numpad + / -) ─────────────────────────────────────
+// Didaftarkan hanya saat halaman Win Lose Bar terbuka, supaya Numpad tidak
+// "dibajak" terus-menerus saat halaman lain yang sedang dipakai.
+const WINLOSE_HOTKEYS = [
+  { accelerator: 'numadd', key: 'win' },
+  { accelerator: 'numsub', key: 'lose' }
+];
+
+function unregisterWinloseHotkeys() {
+  for (const { accelerator } of WINLOSE_HOTKEYS) {
+    try { globalShortcut.unregister(accelerator); } catch (_) {}
+  }
+}
+
+function setWinloseHotkeys(enabled) {
+  unregisterWinloseHotkeys();
+  if (!enabled) return { ok: true, enabled: false };
+
+  const failed = [];
+  for (const { accelerator, key } of WINLOSE_HOTKEYS) {
+    let ok = false;
+    try {
+      // Callback berjalan di main process, jadi tetap terpicu walau window
+      // JekInteract tidak fokus / sedang di belakang aplikasi lain.
+      ok = globalShortcut.register(accelerator, () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send('winlose-hotkey', key);
+      });
+    } catch (_) {}
+    if (!ok) failed.push(accelerator);
+  }
+
+  if (failed.length) {
+    unregisterWinloseHotkeys();
+    return {
+      ok: false,
+      enabled: false,
+      error: 'Tidak bisa mendaftarkan hotkey global (' + failed.join(', ') + '). Mungkin sedang dipakai aplikasi lain.'
+    };
+  }
+
+  log('[electron] hotkey global Win/Lose aktif (numadd, numsub)');
+  return { ok: true, enabled: true };
+}
 
 // ── Jalankan server langsung di main process ──────────────────────────────────
 function startServer() {
@@ -313,6 +358,9 @@ function createWindow(port) {
   });
 
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    // Renderer mati → listener hotkey ikut hilang, jangan biarkan Numpad
+    // tetap "ditahan" secara global tanpa ada yang memproses.
+    unregisterWinloseHotkeys();
     log('[electron] renderer mati: ' + safeString(details));
   });
 
@@ -328,6 +376,7 @@ function createWindow(port) {
   });
 
   mainWindow.on('closed', () => {
+    unregisterWinloseHotkeys();
     mainWindow = null;
   });
 }
@@ -368,6 +417,14 @@ function createTray(port) {
 
 // ── IPC handlers ─────────────────────────────────────────────────────────────
 ipcMain.handle('get-tunnel-url', () => tunnelUrl);
+
+// Halaman Win Lose Bar minta hotkey global Numpad + / - didaftarkan/dilepas.
+ipcMain.handle('winlose-hotkeys', (e, enabled) => {
+  if (!mainWindow || e.sender !== mainWindow.webContents) {
+    return { ok: false, enabled: false, error: 'Window dashboard tidak aktif.' };
+  }
+  return setWinloseHotkeys(!!enabled);
+});
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
@@ -424,6 +481,11 @@ app.on('activate', () => {
   if (mainWindow === null && serverReady) {
     createWindow(serverPort);
   }
+});
+
+app.on('will-quit', () => {
+  // Lepas semua hotkey global agar Numpad kembali normal setelah app keluar.
+  try { globalShortcut.unregisterAll(); } catch (_) {}
 });
 
 app.on('before-quit', () => {

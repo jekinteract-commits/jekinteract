@@ -32,5 +32,24 @@ contextBridge.exposeInMainWorld('__electronBridge__', {
    */
   getTunnelUrl() {
     return ipcRenderer.invoke('get-tunnel-url');
+  },
+
+  /**
+   * Aktifkan/nonaktifkan hotkey global Numpad Add/Subtract (Win/Lose).
+   * Hotkey global tetap diterima walau window JekInteract tidak fokus.
+   * Mengembalikan Promise<{ ok, enabled, error? }>.
+   */
+  setWinloseHotkeys(enabled) {
+    return ipcRenderer.invoke('winlose-hotkeys', !!enabled);
+  },
+
+  /**
+   * Listener saat hotkey global Win/Lose ditekan.
+   * fn(key: 'win' | 'lose'). Mengembalikan fungsi unlisten.
+   */
+  onWinloseHotkey(fn) {
+    const handler = (_event, key) => fn(key);
+    ipcRenderer.on('winlose-hotkey', handler);
+    return () => ipcRenderer.removeListener('winlose-hotkey', handler);
   }
 });
