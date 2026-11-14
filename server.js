@@ -2849,31 +2849,44 @@ function broadcastTunnel() {
   broadcast('tunnelstate', tunnelPayload(), (c) => c.role === 'dashboard');
 }
 
+/* Cari binary cloudflared TANPA nge-block event loop (penting di Wine/Winlator,
+   di mana binary Go besar bisa lambat/nyangkut saat pertama dijalankan). */
+function findCloudflared(cb) {
+  const which = process.platform === 'win32' ? 'where' : 'which';
+  const probe = (bin, done) => {
+    execFile(bin, ['--version'], { timeout: 8000, windowsHide: true }, (err, stdout, stderr) => {
+      done((!err || !!(stdout && stdout.length) || !!(stderr && stderr.length)) ? bin : null);
+    });
+  };
+  const viaPath = () => {
+    execFile(which, ['cloudflared'], { timeout: 8000, windowsHide: true }, (err, stdout) => {
+      cb(!err && stdout && stdout.trim() ? 'cloudflared' : null);
+    });
+  };
+  // 1) env CLOUDFLARED_PATH (dari Electron bundled), 2) PATH sistem
+  if (process.env.CLOUDFLARED_PATH) {
+    probe(process.env.CLOUDFLARED_PATH, (ok) => (ok ? cb(ok) : viaPath()));
+  } else {
+    viaPath();
+  }
+}
+
 function startTunnel(port) {
   if (tunnelProc) return; // sudah berjalan
+  findCloudflared((cfBin) => {
+    if (!cfBin) {
+      tunnelStatus = 'error';
+      tunnelError  = 'cloudflared tidak ditemukan. Install cloudflared agar tunnel bisa aktif.';
+      console.warn('[tunnel] cloudflared tidak ditemukan — lewati.');
+      broadcastTunnel();
+      return;
+    }
+    runTunnel(cfBin, port);
+  });
+}
 
-  // Cari cloudflared: 1) env CLOUDFLARED_PATH (dari Electron bundled), 2) PATH sistem
-  let cfBin = null;
-  if (process.env.CLOUDFLARED_PATH) {
-    try {
-      const r = spawnSync(process.env.CLOUDFLARED_PATH, ['--version'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
-      if (r.status === 0 || r.stdout || r.stderr) cfBin = process.env.CLOUDFLARED_PATH;
-    } catch (_) {}
-  }
-  if (!cfBin) {
-    try {
-      const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['cloudflared'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
-      if (!r.status && r.stdout.trim()) cfBin = 'cloudflared';
-    } catch (_) {}
-  }
-  if (!cfBin) {
-    tunnelStatus = 'error';
-    tunnelError  = 'cloudflared tidak ditemukan. Install cloudflared agar tunnel bisa aktif.';
-    console.warn('[tunnel] cloudflared tidak ditemukan — lewati.');
-    broadcastTunnel();
-    return;
-  }
-
+function runTunnel(cfBin, port) {
+  if (tunnelProc) return;
   tunnelStatus = 'starting';
   tunnelUrl    = '';
   tunnelError  = '';
@@ -2881,7 +2894,8 @@ function startTunnel(port) {
   console.log('[tunnel] memulai Cloudflare tunnel ke port ' + port + '...');
 
   const proc = spawn(cfBin, ['tunnel', '--url', 'http://localhost:' + port], {
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true
   });
   tunnelProc = proc;
 

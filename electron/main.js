@@ -273,7 +273,16 @@ function createWindow(port) {
   }, 3000);
 
   mainWindow.webContents.on('did-finish-load', () => {
+    log('[electron] window selesai load (did-finish-load)');
     if (tunnelUrl) injectTunnelUrl(tunnelUrl);
+  });
+
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    log('[electron] window GAGAL load: code=' + code + ' desc=' + desc + ' url=' + url);
+  });
+
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    log('[electron] renderer mati: ' + safeString(details));
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
