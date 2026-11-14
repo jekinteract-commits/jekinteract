@@ -15,12 +15,18 @@
 const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } = require('electron');
 
 // Disable GPU acceleration — wajib untuk Wine/Winlator dan VM environment
-// Mencegah crash renderer dan window yang tidak muncul karena GPU tidak tersedia
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('disable-gpu-rasterization');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('disable-software-rasterizer');
 app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-dev-shm-usage');
+app.commandLine.appendSwitch('disable-setuid-sandbox');
+app.commandLine.appendSwitch('in-process-gpu');
+app.commandLine.appendSwitch('use-gl', 'swiftshader');
+app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor,CalculateNativeWinOcclusion');
 const { fork, spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
@@ -195,8 +201,10 @@ function createWindow(port) {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // Izinkan autoplay audio (tidak ada gesture-requirement di Electron)
-      autoplayPolicy: 'no-user-gesture-required'
+      autoplayPolicy: 'no-user-gesture-required',
+      // Diperlukan di Wine/Winlator agar renderer tidak blank
+      webSecurity: false,
+      allowRunningInsecureContent: true
     }
   });
 
