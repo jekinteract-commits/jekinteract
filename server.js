@@ -27,9 +27,9 @@ try {
   const nut = require('@nut-tree/nut-js');
   nutKeyboard = nut.keyboard;
   nutKey = nut.Key;
-  console.log('[keystroke] @nut-tree/nut-js tersedia — keystroke aktif');
+  console.log('[keystroke] @nut-tree/nut-js tersedia — keystroke aktif via nut.js');
 } catch (_) {
-  console.log('[keystroke] @nut-tree/nut-js tidak tersedia — keystroke akan dikembalikan sebagai simulasi');
+  console.log('[keystroke] @nut-tree/nut-js tidak tersedia — memakai helper bawaan (Windows asli) bila memungkinkan');
 }
 
 const VERSION = '0.1.0';
@@ -43,6 +43,14 @@ const BASE_PORT = parseInt(process.env.PORT, 10) || 3000;
 const MAX_JSON = 1024 * 1024; // 1 MB
 const MAX_UPLOAD = 300 * 1024 * 1024; // 300 MB
 const SCREEN_COUNT = 20;
+
+/* Deteksi Wine (Winlator/BoxedWine, dsb). Di Wine tidak ada PowerShell asli,
+   jadi mesin keystroke Windows tidak dipakai. */
+const IS_WINE = process.env.JEK_IS_WINE === '1' || (() => {
+  if (process.platform !== 'win32') return false;
+  try { return fs.existsSync(path.join(process.env.WINDIR || 'C:\\windows', 'system32', 'wineboot.exe')); }
+  catch (_) { return false; }
+})();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -949,9 +957,9 @@ async function api(req, res, pathname, q) {
       ? [...new Set(linkedActs.map((a) => whenDetailLabel(a.when)))].join(', ')
       : '—';
 
-    if (!nutKeyboard || !nutKey) {
-      console.log('AKTIVITAS : Test Play - ' + intName + ' - ' + keyLabel + ' - ' + eventLabel + ' - Screen ' + intScreen + ' [simulasi, nut.js belum aktif]');
-      return json(res, 200, { ok: true, simulated: true, message: 'nut.js tidak tersedia — simulasi saja (install @nut-tree/nut-js di Windows).' });
+    if (!keystrokeAvailable()) {
+      console.log('AKTIVITAS : Test Play - ' + intName + ' - ' + keyLabel + ' - ' + eventLabel + ' - Screen ' + intScreen + ' [simulasi]');
+      return json(res, 200, { ok: true, simulated: true, message: 'Mesin keystroke tidak tersedia di perangkat ini — simulasi saja.' });
     }
     console.log('AKTIVITAS : Test Play - ' + intName + ' - ' + keyLabel + ' - ' + eventLabel + ' - Screen ' + intScreen);
     try {
@@ -1630,31 +1638,186 @@ const NUT_KEY_MAP = {
 
 const MOD_TOKENS = new Set(['CTRL','SHIFT','ALT','WIN']);
 
+/* Token UI → Virtual-Key code Windows. Dipakai oleh helper PowerShell
+   (keybd_event) supaya keystroke bisa jalan tanpa native module. */
+const VK_MAP = {
+  A:0x41,B:0x42,C:0x43,D:0x44,E:0x45,F:0x46,G:0x47,H:0x48,I:0x49,J:0x4A,
+  K:0x4B,L:0x4C,M:0x4D,N:0x4E,O:0x4F,P:0x50,Q:0x51,R:0x52,S:0x53,T:0x54,
+  U:0x55,V:0x56,W:0x57,X:0x58,Y:0x59,Z:0x5A,
+  '0':0x30,'1':0x31,'2':0x32,'3':0x33,'4':0x34,
+  '5':0x35,'6':0x36,'7':0x37,'8':0x38,'9':0x39,
+  '-':0xBD,'=':0xBB,'[':0xDB,']':0xDD,'\\':0xDC,';':0xBA,"'":0xDE,
+  ',':0xBC,'.':0xBE,'/':0xBF,'`':0xC0,
+  SPACE:0x20,ENTER:0x0D,TAB:0x09,ESC:0x1B,BACKSPACE:0x08,
+  DELETE:0x2E,INSERT:0x2D,HOME:0x24,END:0x23,PAGEUP:0x21,PAGEDOWN:0x22,
+  UP:0x26,DOWN:0x28,LEFT:0x25,RIGHT:0x27,
+  CAPSLOCK:0x14,PAUSE:0x13,PRINTSCREEN:0x2C,
+  F1:0x70,F2:0x71,F3:0x72,F4:0x73,F5:0x74,F6:0x75,
+  F7:0x76,F8:0x77,F9:0x78,F10:0x79,F11:0x7A,F12:0x7B,
+  NUM0:0x60,NUM1:0x61,NUM2:0x62,NUM3:0x63,NUM4:0x64,
+  NUM5:0x65,NUM6:0x66,NUM7:0x67,NUM8:0x68,NUM9:0x69,
+  NUMADD:0x6B,NUMSUB:0x6D,NUMMUL:0x6A,NUMDIV:0x6F,NUMDOT:0x6E,NUMENTER:0x0D,
+  VOLUMEUP:0xAF,VOLUMEDOWN:0xAE,MUTE:0xAD,PLAYPAUSE:0xB3,NEXTTRACK:0xB0,PREVTRACK:0xB1,
+  CTRL:0x11,SHIFT:0x10,ALT:0x12,WIN:0x5B
+};
+
+/* ---- Helper PowerShell (Windows asli, tanpa native module) -------------- */
+/* Menjaga SATU proses PowerShell hidup dan mengirim perintah keystroke lewat
+   stdin. Pakai keybd_event dari user32.dll. Tidak butuh node-gyp / prebuild. */
+let psProc = null;        // child process PowerShell
+let psFailed = false;     // true kalau helper tidak bisa dijalankan
+let psOutBuf = '';        // buffer stdout
+const psQueue = [];       // antrean promise per perintah
+
+const PS_SCRIPT = [
+  "$ErrorActionPreference = 'Stop'",
+  "$sig = '[DllImport(\"user32.dll\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, System.UIntPtr dwExtraInfo);'",
+  "Add-Type -MemberDefinition $sig -Name KB -Namespace Win32 | Out-Null",
+  "[Console]::Out.WriteLine('READY')",
+  "[Console]::Out.Flush()",
+  "while ($true) {",
+  "  $line = [Console]::In.ReadLine()",
+  "  if ($null -eq $line) { break }",
+  "  if ($line -eq 'QUIT') { break }",
+  "  try {",
+  "    foreach ($tok in $line.Split(';')) {",
+  "      if ($tok.Length -lt 2) { continue }",
+  "      $op = $tok.Substring(0,1)",
+  "      $vk = [Convert]::ToInt32($tok.Substring(1), 16)",
+  "      $flag = if ($op -eq 'U') { 2 } else { 0 }",
+  "      [Win32.KB]::keybd_event([byte]$vk, 0, [uint32]$flag, [System.UIntPtr]::Zero)",
+  "      Start-Sleep -Milliseconds 12",
+  "    }",
+  "    [Console]::Out.WriteLine('OK')",
+  "  } catch {",
+  "    [Console]::Out.WriteLine('ERR ' + $_.Exception.Message)",
+  "  }",
+  "  [Console]::Out.Flush()",
+  "}"
+].join("\n");
+
+function ensurePsHelper() {
+  if (psProc && !psProc.killed) return psProc;
+  psFailed = false;
+  const enc = Buffer.from(PS_SCRIPT, 'utf16le').toString('base64');
+  let proc;
+  try {
+    proc = spawn('powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', enc],
+      { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch (e) {
+    psFailed = true;
+    console.warn('[keystroke] gagal spawn PowerShell: ' + e.message);
+    return null;
+  }
+  psProc = proc;
+  proc.stdout.on('data', (d) => {
+    psOutBuf += d.toString();
+    let idx;
+    while ((idx = psOutBuf.indexOf('\n')) >= 0) {
+      const line = psOutBuf.slice(0, idx).trim();
+      psOutBuf = psOutBuf.slice(idx + 1);
+      if (!line || line === 'READY') continue;
+      const job = psQueue.shift();
+      if (!job) continue;
+      clearTimeout(job.timer);
+      if (line.indexOf('ERR') === 0) job.reject(new Error(line.slice(3).trim()));
+      else job.resolve();
+    }
+  });
+  proc.stderr.on('data', (d) => {
+    const s = d.toString().trim();
+    if (s) console.warn('[keystroke] ps: ' + s);
+  });
+  proc.on('error', (e) => {
+    psFailed = true;
+    psProc = null;
+    console.warn('[keystroke] helper PowerShell error: ' + e.message);
+    while (psQueue.length) { const j = psQueue.shift(); clearTimeout(j.timer); j.reject(e); }
+  });
+  proc.on('exit', (code) => {
+    if (psProc === proc) psProc = null;
+    if (code !== 0 && code !== null) psFailed = true;
+    console.log('[keystroke] helper PowerShell berhenti (exit ' + code + ')');
+    while (psQueue.length) { const j = psQueue.shift(); clearTimeout(j.timer); j.reject(new Error('helper PowerShell berhenti')); }
+  });
+  console.log('[keystroke] helper PowerShell dimulai');
+  return proc;
+}
+
+function psFireLine(line) {
+  return new Promise((resolve, reject) => {
+    const parts = line.trim().toUpperCase().split(/\s+/).filter(Boolean);
+    if (!parts.length) return resolve();
+    for (const p of parts) {
+      if (VK_MAP[p] == null) return reject(new Error('Key tidak dikenal: ' + p));
+    }
+    const mods = parts.filter((p) => MOD_TOKENS.has(p));
+    const keys = parts.filter((p) => !MOD_TOKENS.has(p));
+    const seq = [];
+    mods.forEach((m) => seq.push('D' + VK_MAP[m].toString(16)));
+    keys.forEach((k) => seq.push('D' + VK_MAP[k].toString(16)));
+    [...keys].reverse().forEach((k) => seq.push('U' + VK_MAP[k].toString(16)));
+    [...mods].reverse().forEach((m) => seq.push('U' + VK_MAP[m].toString(16)));
+
+    const proc = ensurePsHelper();
+    if (!proc || !proc.stdin || !proc.stdin.writable) {
+      return reject(new Error('helper PowerShell tidak tersedia'));
+    }
+    const job = { resolve, reject, timer: null };
+    job.timer = setTimeout(() => {
+      const i = psQueue.indexOf(job);
+      if (i >= 0) psQueue.splice(i, 1);
+      reject(new Error('timeout menunggu helper PowerShell'));
+    }, 5000);
+    psQueue.push(job);
+    try { proc.stdin.write(seq.join(';') + '\n'); }
+    catch (e) { clearTimeout(job.timer); reject(e); }
+  });
+}
+
+/** Apakah mesin keystroke asli tersedia di platform ini? */
+function keystrokeAvailable() {
+  if (nutKeyboard && nutKey) return true;                       // nut.js
+  if (process.platform === 'win32' && !IS_WINE && !psFailed) return true; // helper PS
+  return false;
+}
+
 /**
  * Eksekusi satu baris keystroke. Format: "CTRL W" atau "SHIFT U" dll.
  * Mengembalikan Promise.
  */
 async function execKeystrokeLine(line) {
-  if (!nutKeyboard || !nutKey) throw new Error('nut.js tidak tersedia');
-  const parts = line.trim().toUpperCase().split(/\s+/).filter(Boolean);
-  if (!parts.length) return;
+  // Jalur 1: nut.js (kalau terpasang)
+  if (nutKeyboard && nutKey) {
+    const parts = line.trim().toUpperCase().split(/\s+/).filter(Boolean);
+    if (!parts.length) return;
 
-  const mods = parts.filter((p) => MOD_TOKENS.has(p));
-  const keys = parts.filter((p) => !MOD_TOKENS.has(p));
+    const mods = parts.filter((p) => MOD_TOKENS.has(p));
+    const keys = parts.filter((p) => !MOD_TOKENS.has(p));
 
-  // Validasi semua key ada di map
-  for (const p of parts) {
-    if (!NUT_KEY_MAP[p]) throw new Error('Key tidak dikenal: ' + p);
+    // Validasi semua key ada di map
+    for (const p of parts) {
+      if (!NUT_KEY_MAP[p]) throw new Error('Key tidak dikenal: ' + p);
+    }
+
+    // Tekan modifier dulu, lalu key utama, lalu lepas semua
+    const modKeys  = mods.map((m) => nutKey[NUT_KEY_MAP[m]]);
+    const mainKeys = keys.map((k) => nutKey[NUT_KEY_MAP[k]]);
+
+    // nutKeyboard.pressKey(...keys) menekan sekaligus, releaseKey melepas
+    const allKeys = [...modKeys, ...mainKeys];
+    await nutKeyboard.pressKey(...allKeys);
+    await nutKeyboard.releaseKey(...allKeys.reverse());
+    return;
   }
 
-  // Tekan modifier dulu, lalu key utama, lalu lepas semua
-  const modKeys  = mods.map((m) => nutKey[NUT_KEY_MAP[m]]);
-  const mainKeys = keys.map((k) => nutKey[NUT_KEY_MAP[k]]);
+  // Jalur 2: Windows asli → helper PowerShell (keybd_event)
+  if (process.platform === 'win32' && !IS_WINE) {
+    return psFireLine(line);
+  }
 
-  // nutKeyboard.pressKey(...keys) menekan sekaligus, releaseKey melepas
-  const allKeys = [...modKeys, ...mainKeys];
-  await nutKeyboard.pressKey(...allKeys);
-  await nutKeyboard.releaseKey(...allKeys.reverse());
+  throw new Error('Mesin keystroke tidak tersedia di platform ini');
 }
 
 /**
@@ -3033,11 +3196,17 @@ function startMainServer(port, retries) {
     // Auto-start Cloudflare tunnel setelah server siap (defer agar load halaman
     // pertama tidak diblokir oleh probe cloudflared).
     setTimeout(() => startTunnel(port), 1500);
+    // Pemanasan helper keystroke PowerShell (Windows asli) agar trigger pertama
+    // tidak ikut menanggung waktu kompilasi Add-Type (~1-2 detik).
+    if (process.platform === 'win32' && !IS_WINE) {
+      setTimeout(() => { try { ensurePsHelper(); } catch (_) {} }, 6000);
+    }
   });
 }
 
 process.on('SIGINT', () => {
   console.log('\n  Server dihentikan. Sampai jumpa!');
+  try { if (psProc && psProc.stdin) psProc.stdin.write('QUIT\n'); } catch (_) {}
   process.exit(0);
 });
 

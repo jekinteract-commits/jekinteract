@@ -354,7 +354,7 @@ async function testPlay(it) {
       });
       const kd = await kr.json();
       if (kd.simulated) {
-        toast('Keystroke simulasi (nut.js belum aktif): ' + it.keystrokes.join(', '), 'info', 4200);
+        toast('Keystroke simulasi (mesin keystroke belum aktif): ' + it.keystrokes.join(', '), 'info', 4200);
       } else if (kd.ok) {
         toast('Keystroke dikirim: ' + it.keystrokes.join(', '), 'ok', 3500);
       } else {

@@ -117,6 +117,9 @@ function startServer() {
   return new Promise((resolve, reject) => {
     // Set env sebelum require server.js
     process.env.ELECTRON = '1';
+    // Teruskan hasil deteksi Wine agar server.js bisa memilih mesin keystroke
+    // yang tepat (PowerShell hanya ada di Windows asli, bukan di Wine).
+    process.env.JEK_IS_WINE = IS_WINE ? '1' : '0';
 
     // Selalu bind ke semua interface. Jangan warisi env HOST yang aneh dari
     // sistem (bisa bikin server bind ke alamat yang tak terjangkau / gagal).
