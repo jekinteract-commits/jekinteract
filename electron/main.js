@@ -14,19 +14,15 @@
 
 const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } = require('electron');
 
-// Disable GPU acceleration — wajib untuk Wine/Winlator dan VM environment
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-gpu-compositing');
-app.commandLine.appendSwitch('disable-gpu-rasterization');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
-app.commandLine.appendSwitch('disable-software-rasterizer');
+// Winlator: pakai OpenGL (gladio) yang sudah ada, jangan override dengan swiftshader
+// Vulkan (vortex) + OpenGL (gladio) tersedia — biarkan Chromium pakai GPU langsung
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-dev-shm-usage');
-app.commandLine.appendSwitch('disable-setuid-sandbox');
-app.commandLine.appendSwitch('in-process-gpu');
-app.commandLine.appendSwitch('use-gl', 'swiftshader');
-app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor,CalculateNativeWinOcclusion');
+app.commandLine.appendSwitch('use-gl', 'desktop');
+app.commandLine.appendSwitch('use-angle', 'gl');
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
 const { fork, spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
