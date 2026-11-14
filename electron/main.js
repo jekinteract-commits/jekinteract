@@ -18,36 +18,64 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 
-// Winlator: pakai OpenGL (gladio) yang sudah ada, jangan override dengan swiftshader
-// Vulkan (vortex) + OpenGL (gladio) tersedia — biarkan Chromium pakai GPU langsung
-app.commandLine.appendSwitch('no-sandbox');
+// ── Deteksi Wine ──────────────────────────────────────────────────────────────
+// Winlator/BoxedWine (Android) butuh setelan GPU khusus (OpenGL/gladio).
+// Windows asli dibiarkan pakai default Chromium (ANGLE D3D11) yang paling stabil,
+// supaya tidak menukar bug "gagal start" dengan bug "layar blank".
+let IS_WINE = false;
+try {
+  if (process.env.WINEPREFIX || process.env.WINEARCH || process.env.WINEDLLOVERRIDES) {
+    IS_WINE = true;
+  } else if (process.platform === 'win32') {
+    // Wine selalu punya wineboot.exe di system32; Windows asli tidak.
+    const windir = process.env.WINDIR || 'C:\\windows';
+    IS_WINE = fs.existsSync(path.join(windir, 'system32', 'wineboot.exe'));
+  }
+} catch (_) {}
+
 app.commandLine.appendSwitch('disable-dev-shm-usage');
-app.commandLine.appendSwitch('use-gl', 'desktop');
-app.commandLine.appendSwitch('use-angle', 'gl');
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
+if (IS_WINE) {
+  // Winlator: pakai OpenGL (gladio) yang sudah ada, jangan override dengan swiftshader
+  app.commandLine.appendSwitch('no-sandbox');
+  app.commandLine.appendSwitch('use-gl', 'desktop');
+  app.commandLine.appendSwitch('use-angle', 'gl');
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+}
 
 // ── Logging ke file ───────────────────────────────────────────────────────────
 // Di .exe Windows tidak ada console, jadi semua log ditulis ke file agar bisa
 // diperiksa saat troubleshooting.
-let LOG_FILE = '';
+let LOG_FILE = '';        // path utama (buat ditampilkan di dialog error)
+const LOG_FILES = [];     // semua lokasi log yang berhasil dibuat
 function initLog() {
   const candidates = [];
+  // 1) Di samping file .exe portable — paling gampang ditemukan (Windows & Winlator).
+  //    electron-builder men-set PORTABLE_EXECUTABLE_DIR ke folder .exe aslinya.
+  try {
+    const dir = process.env.PORTABLE_EXECUTABLE_DIR;
+    if (dir) candidates.push(path.join(dir, 'jekinteract.log'));
+  } catch (_) {}
+  // 2) %APPDATA%\JekInteract\jekinteract.log
   try { candidates.push(path.join(app.getPath('userData'), 'jekinteract.log')); } catch (_) {}
+  // 3) %TEMP%\jekinteract.log
   try { candidates.push(path.join(os.tmpdir(), 'jekinteract.log')); } catch (_) {}
+
+  const header = '=== JekInteract ' + new Date().toISOString() + ' ===\n';
   for (const f of candidates) {
+    if (LOG_FILES.indexOf(f) !== -1) continue;
     try {
       fs.mkdirSync(path.dirname(f), { recursive: true });
-      fs.writeFileSync(f, '=== JekInteract ' + new Date().toISOString() + ' ===\n');
-      LOG_FILE = f;
-      break;
+      fs.writeFileSync(f, header);
+      LOG_FILES.push(f);
+      if (!LOG_FILE) LOG_FILE = f;
     } catch (_) {}
   }
 }
 function log(msg) {
   const line = '[' + new Date().toISOString() + '] ' + msg;
-  try { if (LOG_FILE) fs.appendFileSync(LOG_FILE, line + '\n'); } catch (_) {}
+  for (const f of LOG_FILES) { try { fs.appendFileSync(f, line + '\n'); } catch (_) {} }
   try { if (process.stdout) process.stdout.write(line + '\n'); } catch (_) {}
 }
 // Tangkap console.log/warn/error dari server.js ke file log juga.
@@ -57,9 +85,9 @@ function captureConsole() {
     console[m] = (...args) => {
       try { orig(...args); } catch (_) {}
       try {
-        if (LOG_FILE) {
+        if (LOG_FILES.length) {
           const text = args.map((a) => (typeof a === 'string' ? a : safeString(a))).join(' ');
-          fs.appendFileSync(LOG_FILE, text + '\n');
+          for (const f of LOG_FILES) { try { fs.appendFileSync(f, text + '\n'); } catch (_) {} }
         }
       } catch (_) {}
     };
@@ -357,6 +385,10 @@ app.whenReady().then(async () => {
   captureConsole();
   log('[electron] mulai — electron ' + process.versions.electron + ', node ' + process.versions.node +
       ', packaged=' + isPackaged + ', ROOT=' + ROOT);
+  log('[electron] env: platform=' + process.platform + ' arch=' + process.arch +
+      ' wine=' + (IS_WINE ? 'ya' : 'tidak') +
+      ' portableDir=' + (process.env.PORTABLE_EXECUTABLE_DIR || '-'));
+  log('[electron] file log: ' + (LOG_FILES.length ? LOG_FILES.join(' | ') : '(tidak ada yang bisa ditulis)'));
 
   try {
     const port = await startServer();
@@ -376,7 +408,7 @@ app.whenReady().then(async () => {
     const { dialog } = require('electron');
     dialog.showErrorBox('JekInteract - Gagal Start',
       'Server tidak bisa dijalankan:\n\n' + (e && e.message ? e.message : e) + '\n\n' +
-      'Log lengkap: ' + (LOG_FILE || '(tidak tersedia)'));
+      'Log lengkap:\n' + (LOG_FILES.length ? LOG_FILES.join('\n') : '(tidak tersedia)'));
     app.quit();
   }
 });
