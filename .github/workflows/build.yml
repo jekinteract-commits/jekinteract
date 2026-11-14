@@ -41,25 +41,57 @@ jobs:
           (Get-Item "resources/cloudflared/cloudflared.exe").Length
 
       # 5. Build .exe dengan electron-builder
+      #    Kalau secrets CSC_LINK + CSC_KEY_PASSWORD diisi (sertifikat code
+      #    signing), electron-builder otomatis menandatangani .exe. Kalau
+      #    belum diisi, build tetap jalan tanpa signature.
       - name: Build Electron app
         run: npm run build:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
 
-      # 6. Upload artifact (tersedia di tab Actions > Artifacts)
+      # 6. Buat checksum SHA-256 supaya teman bisa verifikasi file unduhan
+      - name: Create SHA-256 checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/*.exe | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)"
+          } | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
+
+      # 7. Upload artifact (tersedia di tab Actions > Artifacts)
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: JekInteract-Windows-x64
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/SHA256SUMS.txt
           retention-days: 30
 
-      # 7. Jika ada tag → buat GitHub Release dan upload exe
+      # 8. Jika ada tag → buat GitHub Release dan upload exe + checksum
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.exe
+          files: |
+            dist/*.exe
+            dist/SHA256SUMS.txt
           generate_release_notes: true
+          append_body: |
+            ## Windows SmartScreen / "Unknown publisher"
+
+            File `.exe` ini belum ditandatangani secara digital, jadi Windows
+            SmartScreen bisa menampilkan peringatan "Windows protected your PC"
+            atau "Unknown publisher". Itu peringatan reputasi file baru, bukan
+            bukti virus.
+
+            - Unduh hanya dari halaman Releases repo ini.
+            - Cocokkan SHA-256 dengan file `SHA256SUMS.txt`.
+            - Kalau yakin, klik **More info → Run anyway**.
+            - Kode sumber lengkap tersedia di repo ini dan build dibuat otomatis
+              oleh GitHub Actions dari tag release.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
