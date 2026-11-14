@@ -948,6 +948,8 @@ async function api(req, res, pathname, q) {
     const intScreen = String(body.screen || '').trim() || '—';
     const intId     = String(body.id     || '').trim();
     const keyLabel  = lines.join(', ');
+    // Delay "Muncul" (detik) — biar test play konsisten dengan trigger realtime.
+    const delaySec  = Math.max(0, Math.min(60, Number(body.delay) || 0));
 
     // Kumpulkan semua event dari aktivitas yang terhubung ke interaksi ini
     const linkedActs = (state.activities || []).filter((a) =>
@@ -961,7 +963,16 @@ async function api(req, res, pathname, q) {
       console.log('AKTIVITAS : Test Play - ' + intName + ' - ' + keyLabel + ' - ' + eventLabel + ' - Screen ' + intScreen + ' [simulasi]');
       return json(res, 200, { ok: true, simulated: true, message: 'Mesin keystroke tidak tersedia di perangkat ini — simulasi saja.' });
     }
-    console.log('AKTIVITAS : Test Play - ' + intName + ' - ' + keyLabel + ' - ' + eventLabel + ' - Screen ' + intScreen);
+    const delayMs  = delaySec * 1000;
+    const delayTag = delaySec > 0 ? ' [delay ' + delaySec + 's]' : '';
+    console.log('AKTIVITAS : Test Play - ' + intName + ' - ' + keyLabel + ' - ' + eventLabel + ' - Screen ' + intScreen + delayTag);
+    if (delayMs > 0) {
+      // Tembak setelah delay, tapi jawab request segera (sama seperti realtime).
+      setTimeout(() => {
+        fireKeystrokes(lines).catch((e) => console.warn('[keystroke] gagal (delay):', e.message));
+      }, delayMs);
+      return json(res, 200, { ok: true, fired: lines, delayed: delaySec });
+    }
     try {
       await fireKeystrokes(lines);
       return json(res, 200, { ok: true, fired: lines });

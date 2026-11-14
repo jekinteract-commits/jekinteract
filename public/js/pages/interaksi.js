@@ -350,11 +350,13 @@ async function testPlay(it) {
       const kr = await fetch('/api/keystroke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lines: it.keystrokes, name: it.name, screen: it.screen, id: it.id })
+        body: JSON.stringify({ lines: it.keystrokes, name: it.name, screen: it.screen, id: it.id, delay: it.delay || 0 })
       });
       const kd = await kr.json();
       if (kd.simulated) {
         toast('Keystroke simulasi (mesin keystroke belum aktif): ' + it.keystrokes.join(', '), 'info', 4200);
+      } else if (kd.ok && kd.delayed) {
+        toast('Keystroke dijadwalkan +' + kd.delayed + 's: ' + it.keystrokes.join(', '), 'ok', 3500);
       } else if (kd.ok) {
         toast('Keystroke dikirim: ' + it.keystrokes.join(', '), 'ok', 3500);
       } else {
