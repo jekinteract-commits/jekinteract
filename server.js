@@ -672,7 +672,7 @@ function overlayLabel(id) {
 }
 
 function wsLog(role, id, action, ip) {
-  const tty = process.stdout.isTTY;
+  const tty = process.stdout && process.stdout.isTTY;
   const c = (code, s) => (tty ? '\x1b[' + code + 'm' + s + '\x1b[0m' : s);
   const ts = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   if (role === 'overlay') {
@@ -2856,13 +2856,13 @@ function startTunnel(port) {
   let cfBin = null;
   if (process.env.CLOUDFLARED_PATH) {
     try {
-      const r = spawnSync(process.env.CLOUDFLARED_PATH, ['--version'], { encoding: 'utf8' });
+      const r = spawnSync(process.env.CLOUDFLARED_PATH, ['--version'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
       if (r.status === 0 || r.stdout || r.stderr) cfBin = process.env.CLOUDFLARED_PATH;
     } catch (_) {}
   }
   if (!cfBin) {
     try {
-      const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['cloudflared'], { encoding: 'utf8' });
+      const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['cloudflared'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
       if (!r.status && r.stdout.trim()) cfBin = 'cloudflared';
     } catch (_) {}
   }
@@ -2895,7 +2895,7 @@ function startTunnel(port) {
       broadcastTunnel();
       console.log('[tunnel] aktif: ' + tunnelUrl);
       // Print di banner setelah URL dapat
-      const tty = process.stdout.isTTY;
+      const tty = process.stdout && process.stdout.isTTY;
       const col = (code, s) => (tty ? '\x1b[' + code + 'm' + s + '\x1b[0m' : s);
       console.log('  Tunnel   : ' + col('1;35', tunnelUrl));
       console.log('');
@@ -2947,7 +2947,7 @@ function startTunnel(port) {
 /* Start                                                               */
 /* ------------------------------------------------------------------ */
 function banner(port) {
-  const tty = process.stdout.isTTY;
+  const tty = process.stdout && process.stdout.isTTY;
   const c = (code, s) => (tty ? '\x1b[' + code + 'm' + s + '\x1b[0m' : s);
   const lan = lanAddresses();
   console.log('');
@@ -3009,9 +3009,16 @@ function startMainServer(port, retries) {
   server.listen(port, HOST, () => {
     server.removeListener('error', onError);
     activePort = port;
+    // Beri tahu host (Electron main process) bahwa server benar-benar sudah
+    // listen — tanpa perlu polling HTTP loopback. Ini membuat startup Electron
+    // tidak bergantung pada koneksi 127.0.0.1 yang bisa diblokir firewall.
+    if (typeof global.__JEK_ON_SERVER_READY === 'function') {
+      try { global.__JEK_ON_SERVER_READY(port); } catch (_) { /* abaikan */ }
+    }
     banner(port);
-    // Auto-start Cloudflare tunnel setelah server siap
-    startTunnel(port);
+    // Auto-start Cloudflare tunnel setelah server siap (defer agar load halaman
+    // pertama tidak diblokir oleh probe cloudflared).
+    setTimeout(() => startTunnel(port), 1500);
   });
 }
 

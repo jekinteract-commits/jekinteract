@@ -16,6 +16,7 @@ const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } = require(
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 
 // Winlator: pakai OpenGL (gladio) yang sudah ada, jangan override dengan swiftshader
 // Vulkan (vortex) + OpenGL (gladio) tersedia — biarkan Chromium pakai GPU langsung
@@ -26,6 +27,47 @@ app.commandLine.appendSwitch('use-angle', 'gl');
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
+
+// ── Logging ke file ───────────────────────────────────────────────────────────
+// Di .exe Windows tidak ada console, jadi semua log ditulis ke file agar bisa
+// diperiksa saat troubleshooting.
+let LOG_FILE = '';
+function initLog() {
+  const candidates = [];
+  try { candidates.push(path.join(app.getPath('userData'), 'jekinteract.log')); } catch (_) {}
+  try { candidates.push(path.join(os.tmpdir(), 'jekinteract.log')); } catch (_) {}
+  for (const f of candidates) {
+    try {
+      fs.mkdirSync(path.dirname(f), { recursive: true });
+      fs.writeFileSync(f, '=== JekInteract ' + new Date().toISOString() + ' ===\n');
+      LOG_FILE = f;
+      break;
+    } catch (_) {}
+  }
+}
+function log(msg) {
+  const line = '[' + new Date().toISOString() + '] ' + msg;
+  try { if (LOG_FILE) fs.appendFileSync(LOG_FILE, line + '\n'); } catch (_) {}
+  try { if (process.stdout) process.stdout.write(line + '\n'); } catch (_) {}
+}
+// Tangkap console.log/warn/error dari server.js ke file log juga.
+function captureConsole() {
+  ['log', 'info', 'warn', 'error'].forEach((m) => {
+    const orig = console[m] ? console[m].bind(console) : () => {};
+    console[m] = (...args) => {
+      try { orig(...args); } catch (_) {}
+      try {
+        if (LOG_FILE) {
+          const text = args.map((a) => (typeof a === 'string' ? a : safeString(a))).join(' ');
+          fs.appendFileSync(LOG_FILE, text + '\n');
+        }
+      } catch (_) {}
+    };
+  });
+}
+function safeString(v) {
+  try { return JSON.stringify(v); } catch (_) { return String(v); }
+}
 
 // ── Path root proyek ──────────────────────────────────────────────────────────
 const isPackaged = app.isPackaged;
@@ -48,6 +90,15 @@ function startServer() {
     // Set env sebelum require server.js
     process.env.ELECTRON = '1';
 
+    // Selalu bind ke semua interface. Jangan warisi env HOST yang aneh dari
+    // sistem (bisa bikin server bind ke alamat yang tak terjangkau / gagal).
+    if (process.env.HOST && process.env.HOST !== '0.0.0.0') {
+      log('[electron] mengabaikan env HOST=' + process.env.HOST + ' (dipaksa 0.0.0.0)');
+    }
+    process.env.HOST = '0.0.0.0';
+
+    log('[electron] memuat server... env HOST=' + process.env.HOST + ' PORT=' + (process.env.PORT || '(default 3000)'));
+
     // Lokasi cloudflared yang dibundel saat build (.exe)
     if (isPackaged) {
       const cfBundled = path.join(
@@ -56,52 +107,81 @@ function startServer() {
       );
       if (fs.existsSync(cfBundled)) {
         process.env.CLOUDFLARED_PATH = cfBundled;
+        log('[electron] cloudflared bundled: ' + cfBundled);
+      } else {
+        log('[electron] cloudflared bundled TIDAK ditemukan di ' + cfBundled);
       }
     }
+
+    let settled = false;
+    function ready(port, via) {
+      if (settled) return;
+      settled = true;
+      serverPort = port;
+      serverReady = true;
+      log('[electron] server siap di port ' + port + ' (via ' + via + ')');
+      resolve(port);
+    }
+
+    // Sinyal in-process: server.js memanggil ini tepat setelah listen sukses.
+    // Tidak bergantung pada HTTP loopback (yang bisa diblokir firewall/AV).
+    global.__JEK_ON_SERVER_READY = (port) => ready(port, 'signal');
 
     try {
       // Load server.js di main process — tidak perlu child process
       // Electron main process adalah Node.js, semua module bisa di-require langsung
       require(SERVER_JS);
-      console.log('[electron] server.js loaded di main process');
+      log('[electron] server.js loaded di main process');
     } catch (e) {
-      console.error('[electron] gagal load server.js:', e.message);
+      log('[electron] gagal load server.js: ' + (e && e.stack ? e.stack : e));
       reject(e);
       return;
     }
 
-    // Polling sampai server siap menjawab HTTP
+    // Fallback: polling HTTP (jika sinyal di atas tidak terpanggil).
     const start = Date.now();
-    const TIMEOUT = 30000;
+    const TIMEOUT = 60000;
     const INTERVAL = 300;
-
-    function tryPort(port) {
-      http.get('http://127.0.0.1:' + port + '/api/info', (res) => {
-        let body = '';
-        res.on('data', (c) => { body += c; });
-        res.on('end', () => {
-          try {
-            const info = JSON.parse(body);
-            serverPort = info.port || port;
-          } catch (_) {
-            serverPort = port;
+    const HOSTS = ['127.0.0.1', 'localhost'];
+    // Tambahkan IP LAN — berguna bila loopback diblokir firewall/AV.
+    try {
+      const ifaces = os.networkInterfaces();
+      Object.keys(ifaces).forEach((name) => {
+        (ifaces[name] || []).forEach((a) => {
+          if (a.family === 'IPv4' && !a.internal && HOSTS.indexOf(a.address) === -1) {
+            HOSTS.push(a.address);
           }
-          serverReady = true;
-          resolve(serverPort);
         });
-      }).on('error', () => {
+      });
+    } catch (_) {}
+
+    function probe(port, hostIdx) {
+      if (settled) return;
+      const host = HOSTS[hostIdx];
+      const req = http.get('http://' + host + ':' + port + '/api/info', (res) => {
+        res.resume();
+        ready(port, 'http ' + host);
+      });
+      req.setTimeout(2000, () => req.destroy(new Error('timeout')));
+      req.on('error', (err) => {
+        if (settled) return;
         if (Date.now() - start > TIMEOUT) {
-          reject(new Error('Server tidak merespons setelah ' + (TIMEOUT / 1000) + 's'));
+          reject(new Error(
+            'Server tidak merespons setelah ' + (TIMEOUT / 1000) + 's.\n' +
+            'Percobaan terakhir: http://' + host + ':' + port + ' → ' + (err && err.code || err && err.message || 'error') + '\n' +
+            'Log: ' + (LOG_FILE || '(tidak tersedia)')
+          ));
           return;
         }
         setTimeout(() => {
-          if (port < 3010) tryPort(port + 1);
-          else tryPort(3000);
+          if (hostIdx + 1 < HOSTS.length) probe(port, hostIdx + 1);
+          else if (port < 3010) probe(port + 1, 0);
+          else probe(3000, 0);
         }, INTERVAL);
       });
     }
 
-    setTimeout(() => tryPort(3000), 500);
+    setTimeout(() => probe(3000, 0), 500);
   });
 }
 
@@ -264,26 +344,30 @@ app.whenReady().then(async () => {
     }
   });
 
+  initLog();
+  captureConsole();
+  log('[electron] mulai — electron ' + process.versions.electron + ', node ' + process.versions.node +
+      ', packaged=' + isPackaged + ', ROOT=' + ROOT);
+
   try {
-    console.log('[electron] memuat server...');
     const port = await startServer();
-    console.log('[electron] server siap di port', port);
 
     createWindow(port);
     createTray(port);
 
-    console.log('[electron] menunggu tunnel Cloudflare...');
+    log('[electron] menunggu tunnel Cloudflare...');
     const url = await waitForTunnel(port);
     if (url) {
       injectTunnelUrl(url);
     } else {
-      console.warn('[electron] cloudflared tidak aktif — overlay links pakai localhost');
+      log('[electron] cloudflared tidak aktif — overlay links pakai localhost');
     }
   } catch (e) {
-    console.error('[electron] gagal start:', e.message);
+    log('[electron] gagal start: ' + (e && e.stack ? e.stack : e));
     const { dialog } = require('electron');
     dialog.showErrorBox('JekInteract - Gagal Start',
-      'Server tidak bisa dijalankan:\n\n' + e.message + '\n\nPastikan port 3000 tidak dipakai aplikasi lain.');
+      'Server tidak bisa dijalankan:\n\n' + (e && e.message ? e.message : e) + '\n\n' +
+      'Log lengkap: ' + (LOG_FILE || '(tidak tersedia)'));
     app.quit();
   }
 });
