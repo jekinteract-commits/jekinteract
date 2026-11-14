@@ -4,15 +4,18 @@
  * JekInteract — Electron main process
  *
  * Alur:
- *  1. Jalankan server.js sebagai child process (Node.js fork)
+ *  1. Load server.js langsung di main process (Electron IS Node.js)
  *  2. Tunggu server siap (cek HTTP /api/info)
  *  3. Polling tunnel URL dari /api/tunnel/status hingga online (maks 60 detik)
  *  4. Buka BrowserWindow yang load http://localhost:<port>
  *  5. Inject tunnel URL ke renderer via IPC agar overlay links pakai URL Cloudflare
- *  6. Saat window ditutup → matikan server child process
+ *  6. Saat app quit → server otomatis mati (sama process)
  */
 
 const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } = require('electron');
+const path = require('path');
+const http = require('http');
+const fs = require('fs');
 
 // Winlator: pakai OpenGL (gladio) yang sudah ada, jangan override dengan swiftshader
 // Vulkan (vortex) + OpenGL (gladio) tersedia — biarkan Chromium pakai GPU langsung
@@ -23,14 +26,8 @@ app.commandLine.appendSwitch('use-angle', 'gl');
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
-const { fork, spawn } = require('child_process');
-const path = require('path');
-const http = require('http');
-const fs = require('fs');
 
 // ── Path root proyek ──────────────────────────────────────────────────────────
-// Saat dev  : __dirname = electron/
-// Saat .exe : file dikemas, resources ada di process.resourcesPath
 const isPackaged = app.isPackaged;
 const ROOT = isPackaged
   ? path.join(process.resourcesPath, 'app')
@@ -39,55 +36,39 @@ const ROOT = isPackaged
 const SERVER_JS = path.join(ROOT, 'server.js');
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let serverProcess = null;
 let mainWindow = null;
 let tray = null;
 let serverPort = 3000;
 let serverReady = false;
 let tunnelUrl = '';
 
-// ── Jalankan server Node.js ───────────────────────────────────────────────────
+// ── Jalankan server langsung di main process ──────────────────────────────────
 function startServer() {
   return new Promise((resolve, reject) => {
-    // Lokasi cloudflared yang dibundel saat build (.exe)
-    const cfBundled = isPackaged
-      ? path.join(process.resourcesPath, 'cloudflared', process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared')
-      : null;
+    // Set env sebelum require server.js
+    process.env.ELECTRON = '1';
 
-    const env = Object.assign({}, process.env, { ELECTRON: '1' });
-    if (cfBundled && fs.existsSync(cfBundled)) {
-      env.CLOUDFLARED_PATH = cfBundled;
+    // Lokasi cloudflared yang dibundel saat build (.exe)
+    if (isPackaged) {
+      const cfBundled = path.join(
+        process.resourcesPath, 'cloudflared',
+        process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared'
+      );
+      if (fs.existsSync(cfBundled)) {
+        process.env.CLOUDFLARED_PATH = cfBundled;
+      }
     }
 
-    // Gunakan spawn dengan process.execPath agar aman di path yang mengandung spasi
-    // (fork() di dalam asar/packaged app bermasalah dengan path spasi di Windows)
-    serverProcess = spawn(process.execPath, [SERVER_JS], {
-      cwd: ROOT,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    // Forward log server ke console Electron (terlihat di DevTools)
-    serverProcess.stdout.on('data', (d) => process.stdout.write('[server] ' + d));
-    serverProcess.stderr.on('data', (d) => process.stderr.write('[server] ' + d));
-
-    serverProcess.on('exit', (code) => {
-      console.log('[electron] server berhenti, code=' + code);
-      serverProcess = null;
-      // Jika window masih terbuka dan server mati tak terduga → reload
-      if (mainWindow && !mainWindow.isDestroyed() && serverReady) {
-        setTimeout(() => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.loadFile(path.join(__dirname, 'error.html'));
-          }
-        }, 500);
-      }
-    });
-
-    serverProcess.on('error', (e) => {
-      console.error('[electron] gagal spawn server:', e.message);
+    try {
+      // Load server.js di main process — tidak perlu child process
+      // Electron main process adalah Node.js, semua module bisa di-require langsung
+      require(SERVER_JS);
+      console.log('[electron] server.js loaded di main process');
+    } catch (e) {
+      console.error('[electron] gagal load server.js:', e.message);
       reject(e);
-    });
+      return;
+    }
 
     // Polling sampai server siap menjawab HTTP
     const start = Date.now();
@@ -113,28 +94,21 @@ function startServer() {
           reject(new Error('Server tidak merespons setelah ' + (TIMEOUT / 1000) + 's'));
           return;
         }
-        // Coba port berikutnya (server otomatis naik port jika 3000 pakai)
         setTimeout(() => {
-          // Coba port 3000-3010
           if (port < 3010) tryPort(port + 1);
-          else tryPort(3000); // Balik ke 3000 dan tunggu lagi
+          else tryPort(3000);
         }, INTERVAL);
       });
     }
 
-    // Beri waktu server untuk start sebelum polling
     setTimeout(() => tryPort(3000), 500);
   });
 }
 
 // ── Polling tunnel URL hingga online ─────────────────────────────────────────
-/**
- * Poll /api/tunnel/status sampai status 'online' atau timeout.
- * Mengembalikan tunnel URL jika berhasil, atau '' jika timeout/error.
- */
 function waitForTunnel(port) {
   return new Promise((resolve) => {
-    const TUNNEL_TIMEOUT = 60000; // 60 detik
+    const TUNNEL_TIMEOUT = 60000;
     const TUNNEL_INTERVAL = 1000;
     const start = Date.now();
 
@@ -192,30 +166,25 @@ function createWindow(port) {
     minHeight: 600,
     title: 'JekInteract',
     backgroundColor: '#0f172a',
-    show: false, // tampil setelah konten siap (ada fallback timeout di bawah)
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       autoplayPolicy: 'no-user-gesture-required',
-      // Diperlukan di Wine/Winlator agar renderer tidak blank
       webSecurity: false,
       allowRunningInsecureContent: true
     }
   });
 
-  // Load dashboard
   mainWindow.loadURL('http://127.0.0.1:' + port);
 
-  // Tampilkan window setelah selesai load (hindari flash putih)
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow.isVisible()) mainWindow.show();
-    // Inject tunnel URL saat window pertama kali tampil
     if (tunnelUrl) injectTunnelUrl(tunnelUrl);
   });
 
   // Fallback: paksa tampil setelah 3 detik jika ready-to-show tidak fire
-  // (terjadi di Wine/Winlator karena GPU rendering bermasalah)
   setTimeout(() => {
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       console.log('[electron] fallback show window');
@@ -223,19 +192,16 @@ function createWindow(port) {
     }
   }, 3000);
 
-  // Setiap kali halaman selesai load (navigasi/reload), inject ulang tunnel URL
   mainWindow.webContents.on('did-finish-load', () => {
     if (tunnelUrl) injectTunnelUrl(tunnelUrl);
   });
 
-  // Link eksternal buka di browser sistem, bukan di window Electron
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
   mainWindow.webContents.on('will-navigate', (e, url) => {
-    // Biarkan navigasi ke localhost server
     if (url.startsWith('http://127.0.0.1:' + port) || url.startsWith('http://localhost:' + port)) return;
     e.preventDefault();
     shell.openExternal(url);
@@ -268,10 +234,7 @@ function createTray(port) {
       click: () => shell.openExternal('http://localhost:' + port)
     },
     { type: 'separator' },
-    {
-      label: 'Keluar',
-      click: () => app.quit()
-    }
+    { label: 'Keluar', click: () => app.quit() }
   ]);
 
   tray.setContextMenu(menu);
@@ -284,12 +247,10 @@ function createTray(port) {
 }
 
 // ── IPC handlers ─────────────────────────────────────────────────────────────
-// Renderer bisa minta tunnel URL kapanpun (misal setelah reload)
 ipcMain.handle('get-tunnel-url', () => tunnelUrl);
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  // Single instance — jika sudah ada yang jalan, fokus ke window yang ada
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
     app.quit();
@@ -304,15 +265,13 @@ app.whenReady().then(async () => {
   });
 
   try {
-    console.log('[electron] menjalankan server...');
+    console.log('[electron] memuat server...');
     const port = await startServer();
     console.log('[electron] server siap di port', port);
 
-    // Buka window segera — tidak perlu tunggu tunnel
     createWindow(port);
     createTray(port);
 
-    // Tunggu tunnel URL di background, inject ke renderer saat dapat
     console.log('[electron] menunggu tunnel Cloudflare...');
     const url = await waitForTunnel(port);
     if (url) {
@@ -321,8 +280,7 @@ app.whenReady().then(async () => {
       console.warn('[electron] cloudflared tidak aktif — overlay links pakai localhost');
     }
   } catch (e) {
-    console.error('[electron] gagal start server:', e.message);
-    // Tampilkan dialog error
+    console.error('[electron] gagal start:', e.message);
     const { dialog } = require('electron');
     dialog.showErrorBox('JekInteract - Gagal Start',
       'Server tidak bisa dijalankan:\n\n' + e.message + '\n\nPastikan port 3000 tidak dipakai aplikasi lain.');
@@ -331,22 +289,15 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Di Windows/Linux: tetap jalan di tray saat semua window ditutup
-  // (tidak quit, hanya hide)
+  // Tetap jalan di tray
 });
 
 app.on('activate', () => {
-  // macOS: buka kembali window jika dock icon diklik
   if (mainWindow === null && serverReady) {
     createWindow(serverPort);
   }
 });
 
 app.on('before-quit', () => {
-  // Matikan server child process dengan bersih
-  // Windows tidak support SIGTERM — pakai kill() tanpa signal
-  if (serverProcess) {
-    try { serverProcess.kill(); } catch (_) {}
-    serverProcess = null;
-  }
+  // Server jalan di main process — otomatis mati saat app quit
 });
