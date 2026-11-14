@@ -33,6 +33,7 @@
     "appId": "com.jekinteract.app",
     "productName": "JekInteract",
     "copyright": "Copyright © 2024",
+    "asar": false,
     "directories": {
       "output": "dist"
     },

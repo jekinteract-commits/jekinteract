@@ -13,7 +13,7 @@
  */
 
 const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } = require('electron');
-const { fork } = require('child_process');
+const { fork, spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -49,10 +49,12 @@ function startServer() {
       env.CLOUDFLARED_PATH = cfBundled;
     }
 
-    serverProcess = fork(SERVER_JS, [], {
+    // Gunakan spawn dengan process.execPath agar aman di path yang mengandung spasi
+    // (fork() di dalam asar/packaged app bermasalah dengan path spasi di Windows)
+    serverProcess = spawn(process.execPath, [SERVER_JS], {
       cwd: ROOT,
       env,
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc']
+      stdio: ['ignore', 'pipe', 'pipe']
     });
 
     // Forward log server ke console Electron (terlihat di DevTools)
@@ -73,7 +75,7 @@ function startServer() {
     });
 
     serverProcess.on('error', (e) => {
-      console.error('[electron] gagal fork server:', e.message);
+      console.error('[electron] gagal spawn server:', e.message);
       reject(e);
     });
 
@@ -321,8 +323,9 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   // Matikan server child process dengan bersih
+  // Windows tidak support SIGTERM — pakai kill() tanpa signal
   if (serverProcess) {
-    serverProcess.kill('SIGTERM');
+    try { serverProcess.kill(); } catch (_) {}
     serverProcess = null;
   }
 });
