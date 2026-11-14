@@ -13,6 +13,14 @@
  */
 
 const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } = require('electron');
+
+// Disable GPU acceleration — wajib untuk Wine/Winlator dan VM environment
+// Mencegah crash renderer dan window yang tidak muncul karena GPU tidak tersedia
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('no-sandbox');
 const { fork, spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
@@ -182,7 +190,7 @@ function createWindow(port) {
     minHeight: 600,
     title: 'JekInteract',
     backgroundColor: '#0f172a',
-    show: false, // tampil setelah konten siap
+    show: false, // tampil setelah konten siap (ada fallback timeout di bawah)
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -197,10 +205,19 @@ function createWindow(port) {
 
   // Tampilkan window setelah selesai load (hindari flash putih)
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    if (!mainWindow.isVisible()) mainWindow.show();
     // Inject tunnel URL saat window pertama kali tampil
     if (tunnelUrl) injectTunnelUrl(tunnelUrl);
   });
+
+  // Fallback: paksa tampil setelah 3 detik jika ready-to-show tidak fire
+  // (terjadi di Wine/Winlator karena GPU rendering bermasalah)
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.log('[electron] fallback show window');
+      mainWindow.show();
+    }
+  }, 3000);
 
   // Setiap kali halaman selesai load (navigasi/reload), inject ulang tunnel URL
   mainWindow.webContents.on('did-finish-load', () => {
