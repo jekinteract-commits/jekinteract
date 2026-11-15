@@ -2,8 +2,9 @@ name: Build Windows EXE
 
 on:
   push:
-    tags:
-      - 'v*'          # trigger saat push tag, misal: git tag v1.0.0 && git push --tags
+    branches: [ master ]        # trigger saat push ke branch master
+    tags:                       # tetap jalan juga saat push tag
+      - 'v*'
   workflow_dispatch:  # bisa juga trigger manual dari tab Actions di GitHub
 
 permissions:
