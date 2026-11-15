@@ -49,6 +49,7 @@ jobs:
         run: npm run build:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --openssl-legacy-provider
 
       # 6. Buat checksum SHA-256 supaya teman bisa verifikasi file unduhan
       - name: Create SHA-256 checksums

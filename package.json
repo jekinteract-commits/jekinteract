@@ -14,7 +14,7 @@
     "tunnel": "cloudflared tunnel --url http://localhost:3000",
     "electron": "electron .",
     "electron:dev": "electron . --inspect",
-    "build:win": "electron-builder --win --x64"
+    "build:win": "CI=true electron-builder --win --x64"
   },
   "engines": {
     "node": ">=16"
