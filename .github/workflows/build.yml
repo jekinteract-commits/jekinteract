@@ -20,10 +20,9 @@ jobs:
 
       # 2. Setup Node.js
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       # 3. Install dependencies (skip optional nut-tree yang butuh native build)
       - name: Install dependencies
