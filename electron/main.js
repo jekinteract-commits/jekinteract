@@ -105,6 +105,18 @@ const ROOT = isPackaged
 
 const SERVER_JS = path.join(ROOT, 'server.js');
 
+// ── Ikon aplikasi (window + tray) ────────────────────────────────────────────
+// Tanpa ikon, Tray di Windows jadi tidak terlihat → app seolah "hilang" padahal
+// masih hidup di background. Ikon PNG ini ikut dibundel lewat folder public.
+const ICON_PATH = path.join(ROOT, 'public', 'assets', 'icon.png');
+function appIcon() {
+  try {
+    const img = nativeImage.createFromPath(ICON_PATH);
+    if (img && !img.isEmpty()) return img;
+  } catch (_) {}
+  return nativeImage.createEmpty();
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let mainWindow = null;
 let tray = null;
@@ -172,6 +184,37 @@ function startServer() {
       log('[electron] mengabaikan env HOST=' + process.env.HOST + ' (dipaksa 0.0.0.0)');
     }
     process.env.HOST = '0.0.0.0';
+
+    // ── Folder data yang persisten ──────────────────────────────────────────
+    // Mode portable mengekstrak app ke folder TEMP yang dihapus saat keluar.
+    // Kalau data disimpan di sana, state.json & upload hilang tiap launch.
+    // Simpan di samping .exe (portable) atau di %APPDATA% (installer).
+    try {
+      let dataDir = '';
+      const portableDir = process.env.PORTABLE_EXECUTABLE_DIR;
+      if (isPackaged) {
+        dataDir = portableDir
+          ? path.join(portableDir, 'data')
+          : path.join(app.getPath('userData'), 'data');
+      }
+      if (dataDir) {
+        fs.mkdirSync(dataDir, { recursive: true });
+        const probe = path.join(dataDir, '.write-test');
+        fs.writeFileSync(probe, 'ok');
+        fs.unlinkSync(probe);
+        process.env.JEK_DATA_DIR = dataDir;
+        log('[electron] folder data: ' + dataDir);
+      }
+    } catch (e) {
+      try {
+        const fallback = path.join(app.getPath('userData'), 'data');
+        fs.mkdirSync(fallback, { recursive: true });
+        process.env.JEK_DATA_DIR = fallback;
+        log('[electron] folder data (fallback): ' + fallback);
+      } catch (e2) {
+        log('[electron] gagal menyiapkan folder data: ' + (e2 && e2.message ? e2.message : e2));
+      }
+    }
 
     log('[electron] memuat server... env HOST=' + process.env.HOST + ' PORT=' + (process.env.PORT || '(default 3000)'));
 
@@ -321,6 +364,7 @@ function createWindow(port) {
     minWidth: 900,
     minHeight: 600,
     title: 'JekInteract',
+    icon: appIcon(),
     backgroundColor: '#0f172a',
     show: false,
     webPreferences: {
@@ -383,20 +427,23 @@ function createWindow(port) {
 
 // ── Tray icon ─────────────────────────────────────────────────────────────────
 function createTray(port) {
-  tray = new Tray(nativeImage.createEmpty());
+  tray = new Tray(appIcon());
   tray.setToolTip('JekInteract — port ' + port);
+
+  const showWindow = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    } else if (serverReady) {
+      createWindow(serverPort);
+    }
+  };
 
   const menu = Menu.buildFromTemplate([
     {
       label: 'Buka JekInteract',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        } else {
-          createWindow(port);
-        }
-      }
+      click: showWindow
     },
     {
       label: 'Buka di Browser',
@@ -407,12 +454,9 @@ function createTray(port) {
   ]);
 
   tray.setContextMenu(menu);
-  tray.on('double-click', () => {
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
+  // Klik kiri pada ikon tray juga membuka window (Windows: single click).
+  tray.on('click', showWindow);
+  tray.on('double-click', showWindow);
 }
 
 // ── IPC handlers ─────────────────────────────────────────────────────────────
@@ -435,9 +479,15 @@ app.whenReady().then(async () => {
   }
 
   app.on('second-instance', () => {
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
       mainWindow.focus();
+    } else if (serverReady) {
+      // Window sudah ditutup tapi app masih hidup di tray. Dulu di sini tidak
+      // terjadi apa-apa, jadi user yang klik .exe lagi merasa "app tidak mau
+      // terbuka" padahal prosesnya masih jalan di background.
+      createWindow(serverPort);
     }
   });
 

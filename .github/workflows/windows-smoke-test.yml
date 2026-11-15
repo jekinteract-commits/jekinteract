@@ -75,6 +75,10 @@ jobs:
           if (-not $alive) { throw "Aplikasi mati sendiri saat dibuka." }
           if (-not $httpOk) { throw "Dashboard tidak merespons di port 3000." }
 
+          $dataDir = Join-Path $env:APPDATA "jekinteract\data"
+          if (Test-Path $dataDir) { Write-Host "=== DATA DIR OK: $dataDir ===" }
+          else { Write-Host "=== DATA DIR TIDAK DITEMUKAN: $dataDir ===" }
+
       - name: Run portable exe (yang diunduh user)
         shell: pwsh
         run: |
@@ -115,12 +119,14 @@ jobs:
           if (-not $alive) { throw "Portable exe mati sendiri saat dibuka." }
           if (-not $httpOk) { throw "Portable exe: dashboard tidak merespons." }
 
+          # Data harus persisten di samping .exe, bukan di folder TEMP yang dihapus.
+          if (Test-Path "dist\data") { Write-Host "=== DATA DIR OK: dist\data ===" }
+          else { throw "Folder data tidak dibuat di samping exe (dist\data)." }
+
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: windows-smoke-logs
-          path: |
-            dist/jekinteract.log
-            ${{ runner.temp }}/../../AppData/Local/Temp/jekinteract.log
+          path: dist/jekinteract.log
           if-no-files-found: ignore

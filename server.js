@@ -35,7 +35,7 @@ try {
 const VERSION = '0.1.0';
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
-const DATA = path.join(ROOT, 'data');
+const DATA = process.env.JEK_DATA_DIR ? path.resolve(process.env.JEK_DATA_DIR) : path.join(ROOT, 'data');
 const UPLOADS = path.join(DATA, 'uploads');
 const STATE_FILE = path.join(DATA, 'state.json');
 const HOST = process.env.HOST || '0.0.0.0';

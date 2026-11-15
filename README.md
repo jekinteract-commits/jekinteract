@@ -78,3 +78,30 @@ build tetap berjalan, tetapi Windows akan tetap menampilkan "Unknown publisher".
 
 Untuk proyek open source, layanan seperti SignPath.io juga menyediakan code signing
 gratis. Setelah terdaftar, integrasikan ke workflow GitHub Actions.
+
+## Aplikasi tidak terbuka / seolah tidak terjadi apa-apa
+
+Beberapa hal yang perlu dicek, urut dari yang paling sering:
+
+1. **Windows 10/11 64-bit.** Electron 31 tidak lagi mendukung Windows 7/8/8.1,
+   jadi di versi Windows lama aplikasi tidak bisa jalan.
+2. **SmartScreen / antivirus.** Kalau muncul "Windows protected your PC", klik
+   **More info → Run anyway**. Kalau file langsung hilang setelah diunduh,
+   kemungkinan diblokir antivirus (file belum ditandatangani).
+3. **Aplikasi masih hidup di tray.** Menutup window **tidak** mematikan aplikasi;
+   JekInteract tetap berjalan di background agar overlay tetap hidup. Klik ikon
+   JekInteract di tray (pojok kanan bawah) untuk membuka lagi, atau klik kanan →
+   **Keluar**. Kalau proses lama masih berjalan, membuka `.exe` lagi hanya akan
+   memunculkan window yang sama (tidak membuat instance baru).
+4. **Cek file log.** Log ditulis ke beberapa lokasi:
+   - samping file `.exe` → `jekinteract.log` (mode portable)
+   - `%APPDATA%\JekInteract\jekinteract.log`
+   - `%TEMP%\jekinteract.log`
+
+   Kirim isi file log tersebut kalau masih gagal.
+
+Data aplikasi (pengaturan, upload, riwayat) disimpan di folder `data\` **di samping
+file `.exe`** saat memakai versi portable, jadi tidak hilang saat aplikasi ditutup.
+Kalau folder itu tidak bisa ditulis (misalnya `.exe` ditaruh di `Program Files`),
+aplikasi otomatis memakai `%APPDATA%\JekInteract\data`.
+
