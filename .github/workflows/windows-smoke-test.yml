@@ -1,0 +1,126 @@
+name: Windows Smoke Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Download cloudflared.exe
+        shell: pwsh
+        run: |
+          $url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+          New-Item -ItemType Directory -Force -Path "resources/cloudflared" | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile "resources/cloudflared/cloudflared.exe"
+          Write-Host "cloudflared.exe: $((Get-Item 'resources/cloudflared/cloudflared.exe').Length) bytes"
+
+      - name: Build portable exe
+        run: npm run build:win
+
+      - name: Run packaged app (win-unpacked)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $exe = "dist\win-unpacked\JekInteract.exe"
+          if (-not (Test-Path $exe)) { throw "exe tidak ada: $exe" }
+
+          $before = Get-ChildItem "$env:TEMP\jekinteract.log","$env:APPDATA\JekInteract\jekinteract.log" -ErrorAction SilentlyContinue
+          $before | ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 35
+
+          $alive = -not $p.HasExited
+          Write-Host "=== PROSES UTAMA ALIVE: $alive ==="
+          if ($p.HasExited) { Write-Host "=== EXIT CODE: $($p.ExitCode) ===" }
+
+          $httpOk = $false
+          try {
+            $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:3000/api/info" -TimeoutSec 8
+            Write-Host "=== HTTP $($r.StatusCode) ==="
+            Write-Host $r.Content
+            $httpOk = $true
+          } catch {
+            Write-Host "=== HTTP GAGAL: $($_.Exception.Message) ==="
+          }
+
+          $logs = Get-ChildItem "$env:TEMP\jekinteract.log","$env:APPDATA\JekInteract\jekinteract.log" -ErrorAction SilentlyContinue
+          foreach ($l in $logs) {
+            Write-Host "=== LOG: $($l.FullName) ==="
+            Get-Content $l.FullName -Tail 200
+          }
+          if (-not $logs) { Write-Host "=== TIDAK ADA FILE LOG ===" }
+
+          try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}
+          Get-Process -Name "JekInteract" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 3
+
+          if (-not $alive) { throw "Aplikasi mati sendiri saat dibuka." }
+          if (-not $httpOk) { throw "Dashboard tidak merespons di port 3000." }
+
+      - name: Run portable exe (yang diunduh user)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $exe = Get-ChildItem "dist\*.exe" | Where-Object { $_.Name -like "JekInteractUpdate-*" } | Select-Object -First 1
+          if (-not $exe) { throw "portable exe tidak ditemukan di dist" }
+          Write-Host "=== TESTING $($exe.Name) ($([math]::Round($exe.Length/1MB,1)) MB) ==="
+
+          Remove-Item "dist\jekinteract.log" -Force -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath $exe.FullName -PassThru
+          Start-Sleep -Seconds 50
+
+          $alive = -not $p.HasExited
+          Write-Host "=== PORTABLE PROCESS ALIVE: $alive ==="
+
+          $httpOk = $false
+          try {
+            $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:3000/api/info" -TimeoutSec 8
+            Write-Host "=== HTTP $($r.StatusCode) ==="
+            Write-Host $r.Content
+            $httpOk = $true
+          } catch {
+            Write-Host "=== HTTP GAGAL: $($_.Exception.Message) ==="
+          }
+
+          $log = "dist\jekinteract.log"
+          if (Test-Path $log) {
+            Write-Host "=== LOG PORTABLE (samping exe) ==="
+            Get-Content $log -Tail 200
+          } else {
+            Write-Host "=== LOG SAMPING EXE TIDAK ADA ==="
+          }
+
+          try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}
+          Get-Process -Name "JekInteract" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 3
+
+          if (-not $alive) { throw "Portable exe mati sendiri saat dibuka." }
+          if (-not $httpOk) { throw "Portable exe: dashboard tidak merespons." }
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-smoke-logs
+          path: |
+            dist/jekinteract.log
+            ${{ runner.temp }}/../../AppData/Local/Temp/jekinteract.log
+          if-no-files-found: ignore
