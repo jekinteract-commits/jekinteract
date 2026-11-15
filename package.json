@@ -36,6 +36,7 @@
   "build": {
     "appId": "com.jekinteract.app",
     "productName": "JekInteract",
+    "artifactName": "JekInteractUpdate-${npmPackageVersion}",
     "copyright": "Copyright © 2024",
     "asar": false,
     "directories": {
