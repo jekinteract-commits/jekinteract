@@ -1,6 +1,6 @@
 {
   "name": "jekinteract",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "JekInteract - tools interaksi TikTok Live (fase UI). Tanpa dependency, jalankan dengan npm start.",
   "main": "electron/main.js",
   "private": true,
@@ -36,7 +36,7 @@
   "build": {
     "appId": "com.jekinteract.app",
     "productName": "JekInteract",
-    "artifactName": "JekInteractUpdate-${version}",
+    "artifactName": "JekInteractUpdate-${version}.exe",
     "copyright": "Copyright © 2024",
     "asar": false,
     "directories": {
