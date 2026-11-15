@@ -332,6 +332,16 @@ export const API = {
     body: JSON.stringify({ goal })
   }),
 
+  /* ----- Config export / import ----- */
+  // Ambil semua konfigurasi server (interaksi, aktivitas, music, subathon, goals, dst.)
+  configExport: () => json('/api/config/export'),
+  // Kirim payload ekspor kembali; server restore key yang diizinkan.
+  configImport: (payload) => json('/api/config/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {})
+  }),
+
   /* ----- Music ----- */
   musicState: () => json('/api/music/state'),
   musicEnqueue: (user, title, ytId) => json('/api/music/enqueue', {

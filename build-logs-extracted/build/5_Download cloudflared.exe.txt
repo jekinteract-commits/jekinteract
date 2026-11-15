@@ -1,0 +1,18 @@
+﻿2026-11-14T21:35:13.1854525Z ##[group]Run $version = "latest"
+2026-11-14T21:35:13.1854943Z [36;1m$version = "latest"[0m
+2026-11-14T21:35:13.1855487Z [36;1m$url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"[0m
+2026-11-14T21:35:13.1856159Z [36;1mNew-Item -ItemType Directory -Force -Path "resources/cloudflared"[0m
+2026-11-14T21:35:13.1856691Z [36;1mInvoke-WebRequest -Uri $url -OutFile "resources/cloudflared/cloudflared.exe"[0m
+2026-11-14T21:35:13.1857143Z [36;1mWrite-Host "cloudflared.exe downloaded:"[0m
+2026-11-14T21:35:13.1857511Z [36;1m(Get-Item "resources/cloudflared/cloudflared.exe").Length[0m
+2026-11-14T21:35:13.1930841Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-14T21:35:13.1931197Z ##[endgroup]
+2026-11-14T21:35:13.5768846Z 
+2026-11-14T21:35:13.5777088Z     Directory: D:\a\jekinteract\jekinteract\resources
+2026-11-14T21:35:13.5777588Z 
+2026-11-14T21:35:13.5780040Z [32;1mMode   [0m[32;1m              LastWriteTime[0m [32;1;3m        Length[0m[32;1m Name[0m
+2026-11-14T21:35:13.5781697Z [32;1m----   [0m [32;1m             -------------[0m [32;1m        ------[0m [32;1m----[0m
+2026-11-14T21:35:13.5943013Z d----          11/14/2026  9:35 PM                [44;1mcloudflared[0m
+2026-11-14T21:35:14.3838938Z cloudflared.exe downloaded:
+2026-11-14T21:35:14.3922961Z 55397592
+2026-11-14T21:35:14.3948220Z 

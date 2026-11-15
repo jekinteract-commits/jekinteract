@@ -1,0 +1,21 @@
+﻿2026-11-14T21:35:14.4764249Z ##[group]Run npm run build:win
+2026-11-14T21:35:14.4764594Z [36;1mnpm run build:win[0m
+2026-11-14T21:35:14.4834800Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-14T21:35:14.4835158Z env:
+2026-11-14T21:35:14.4837610Z   GH_TOKEN: ***
+2026-11-14T21:35:14.4837801Z   CSC_LINK: 
+2026-11-14T21:35:14.4837979Z   CSC_KEY_PASSWORD: 
+2026-11-14T21:35:14.4838182Z ##[endgroup]
+2026-11-14T21:35:15.1131992Z 
+2026-11-14T21:35:15.1132667Z > jekinteract@1.0.13 build:win
+2026-11-14T21:35:15.1133242Z > electron-builder --win --x64
+2026-11-14T21:35:15.1133468Z 
+2026-11-14T21:35:15.8816672Z   • electron-builder  version=24.13.3 os=10.0.26100
+2026-11-14T21:35:15.8825859Z   • artifacts will be published  reason=tag is defined tag=v1.0.13
+2026-11-14T21:35:15.8885602Z   • loaded configuration  file=package.json ("build" field)
+2026-11-14T21:35:16.1053134Z   • packaging       platform=win32 arch=x64 electron=31.0.0 appOutDir=dist\win-unpacked
+2026-11-14T21:35:16.4577834Z   • downloading     url=https://github.com/electron/electron/releases/download/v31.0.0/electron-v31.0.0-win32-x64.zip size=110 MB parts=8
+2026-11-14T21:35:16.8406080Z   • downloaded      url=https://github.com/electron/electron/releases/download/v31.0.0/electron-v31.0.0-win32-x64.zip duration=719ms
+2026-11-14T21:35:18.6376132Z   • asar usage is disabled — this is strongly not recommended  solution=enable asar and use asarUnpack to unpack files that must be externally available
+2026-11-14T21:35:20.3964971Z   ⨯ Env WIN_CSC_LINK is not correct, cannot resolve: D:\a\jekinteract\jekinteract not a file
+2026-11-14T21:35:20.5272077Z ##[error]Process completed with exit code 1.

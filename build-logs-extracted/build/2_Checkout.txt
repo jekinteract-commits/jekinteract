@@ -1,0 +1,76 @@
+﻿2026-11-14T21:34:42.8479776Z ##[group]Run actions/checkout@v4
+2026-11-14T21:34:42.8481249Z with:
+2026-11-14T21:34:42.8482065Z   repository: jekinteract-commits/jekinteract
+2026-11-14T21:34:42.8489934Z   token: ***
+2026-11-14T21:34:42.8490700Z   ssh-strict: true
+2026-11-14T21:34:42.8491465Z   ssh-user: git
+2026-11-14T21:34:42.8492234Z   persist-credentials: true
+2026-11-14T21:34:42.8493080Z   clean: true
+2026-11-14T21:34:42.8493848Z   sparse-checkout-cone-mode: true
+2026-11-14T21:34:42.8494762Z   fetch-depth: 1
+2026-11-14T21:34:42.8495529Z   fetch-tags: false
+2026-11-14T21:34:42.8496753Z   show-progress: true
+2026-11-14T21:34:42.8497717Z   lfs: false
+2026-11-14T21:34:42.8498634Z   submodules: false
+2026-11-14T21:34:42.8499727Z   set-safe-directory: true
+2026-11-14T21:34:42.8500830Z   allow-unsafe-pr-checkout: false
+2026-11-14T21:34:42.8502394Z ##[endgroup]
+2026-11-14T21:34:42.9992987Z Syncing repository: jekinteract-commits/jekinteract
+2026-11-14T21:34:42.9995539Z ##[group]Getting Git version info
+2026-11-14T21:34:42.9996732Z Working directory is 'D:\a\jekinteract\jekinteract'
+2026-11-14T21:34:43.1145893Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-14T21:34:43.4996335Z git version 2.56.0.windows.4
+2026-11-14T21:34:43.5079535Z ##[endgroup]
+2026-11-14T21:34:43.5087865Z Temporarily overriding HOME='D:\a\_temp\2677f515-b222-4d95-95c1-ddfc0dc899e5' before making global git config changes
+2026-11-14T21:34:43.5090265Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-14T21:34:43.5093070Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\jekinteract\jekinteract
+2026-11-14T21:34:43.5748595Z Deleting the contents of 'D:\a\jekinteract\jekinteract'
+2026-11-14T21:34:43.5756214Z ##[group]Initializing the repository
+2026-11-14T21:34:43.5764094Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\jekinteract\jekinteract
+2026-11-14T21:34:43.6636301Z Initialized empty Git repository in D:/a/jekinteract/jekinteract/.git/
+2026-11-14T21:34:43.6682804Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/jekinteract-commits/jekinteract
+2026-11-14T21:34:43.7409519Z ##[endgroup]
+2026-11-14T21:34:43.7410885Z ##[group]Disabling automatic garbage collection
+2026-11-14T21:34:43.7419077Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-14T21:34:43.7807068Z ##[endgroup]
+2026-11-14T21:34:43.7809095Z ##[group]Setting up auth
+2026-11-14T21:34:43.7819974Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-14T21:34:43.8251001Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-14T21:34:45.3771720Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-14T21:34:45.4150508Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-14T21:34:45.9808421Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-14T21:34:46.0193702Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-14T21:34:46.5757017Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-11-14T21:34:46.6170629Z ##[endgroup]
+2026-11-14T21:34:46.6171560Z ##[group]Fetching the repository
+2026-11-14T21:34:46.6184818Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +b44544acd6283b272e14a7ea1b038c30f2c263ef:refs/tags/v1.0.13
+2026-11-14T21:34:47.7660885Z From https://github.com/jekinteract-commits/jekinteract
+2026-11-14T21:34:47.7661823Z  * [new ref]         b44544acd6283b272e14a7ea1b038c30f2c263ef -> v1.0.13
+2026-11-14T21:34:47.7694159Z ##[endgroup]
+2026-11-14T21:34:47.7694874Z ##[group]Determining the checkout info
+2026-11-14T21:34:47.7697182Z ##[endgroup]
+2026-11-14T21:34:47.7706341Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-14T21:34:47.8249637Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-14T21:34:47.8702060Z ##[group]Checking out the ref
+2026-11-14T21:34:47.8711615Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force refs/tags/v1.0.13
+2026-11-14T21:34:47.9522542Z Note: switching to 'refs/tags/v1.0.13'.
+2026-11-14T21:34:47.9522913Z 
+2026-11-14T21:34:47.9523127Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-14T21:34:47.9523628Z changes and commit them, and you can discard any commits you make in this
+2026-11-14T21:34:47.9525134Z state without impacting any branches by switching back to a branch.
+2026-11-14T21:34:47.9525774Z 
+2026-11-14T21:34:47.9526338Z If you want to create a new branch to retain commits you create, you may
+2026-11-14T21:34:47.9526936Z do so (now or later) by using -c with the switch command. Example:
+2026-11-14T21:34:47.9527312Z 
+2026-11-14T21:34:47.9527439Z   git switch -c <new-branch-name>
+2026-11-14T21:34:47.9527659Z 
+2026-11-14T21:34:47.9527775Z Or undo this operation with:
+2026-11-14T21:34:47.9528005Z 
+2026-11-14T21:34:47.9528111Z   git switch -
+2026-11-14T21:34:47.9528262Z 
+2026-11-14T21:34:47.9528515Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-14T21:34:47.9530215Z 
+2026-11-14T21:34:47.9530585Z HEAD is now at b44544a build: versi 1.0.13 + signing opsional, checksum, dan info SmartScreen
+2026-11-14T21:34:47.9697836Z ##[endgroup]
+2026-11-14T21:34:48.0212230Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-14T21:34:48.0557117Z b44544acd6283b272e14a7ea1b038c30f2c263ef

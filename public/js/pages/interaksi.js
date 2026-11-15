@@ -507,7 +507,9 @@ function openInteractionForm(existing, onSave) {
 
     '<div class="fgrp" data-f="trg"><span class="lbl">Action Trigger</span>' +
     '<p class="hint">Centang satu atau lebih aksi yang dijalankan saat interaksi dipicu.</p>' +
-    '<div class="trgs">' + TRIGGERS.map((t) => triggerBlockHTML(t, data)).join('') + '</div></div>' +
+    '<div class="trgs">' + TRIGGERS.map((t) => triggerBlockHTML(t, data)).join('') + '</div>' +
+    '<p class="hint small-dim" style="font-size:0.85em;color:#666; margin-top:4px;">⚠ Keystroke hanya support di Windows dengan Electron build. Di Linux/Termux hasilnya simulasi saja.</p>' +
+    '</div></div>' +
 
     '<div class="fgrp"><label class="lbl" for="if-vol">Volume Media</label>' +
     '<div class="rng"><input id="if-vol" type="range" min="0" max="100" step="1" value="' + data.volume + '"><output>' + data.volume + '%</output></div></div>' +

@@ -1,0 +1,22 @@
+﻿2026-11-14T21:34:48.2185977Z ##[group]Run actions/setup-node@v4
+2026-11-14T21:34:48.2186331Z with:
+2026-11-14T21:34:48.2186524Z   node-version: 20
+2026-11-14T21:34:48.2186722Z   cache: npm
+2026-11-14T21:34:48.2186906Z   always-auth: false
+2026-11-14T21:34:48.2187110Z   check-latest: false
+2026-11-14T21:34:48.2189649Z   token: ***
+2026-11-14T21:34:48.2189840Z ##[endgroup]
+2026-11-14T21:34:48.4021565Z Attempting to download 20...
+2026-11-14T21:34:48.4218762Z (node:10064) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-14T21:34:48.4219552Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-14T21:34:49.2384005Z Acquiring 20.20.2 - x64 from https://github.com/actions/node-versions/releases/download/20.20.2-23521894959/node-20.20.2-win32-x64.7z
+2026-11-14T21:34:49.6646838Z Extracting ...
+2026-11-14T21:34:51.9080568Z Adding to the cache ...
+2026-11-14T21:34:55.2495576Z ##[group]Environment details
+2026-11-14T21:34:56.4215385Z node: v20.20.2
+2026-11-14T21:34:56.4215770Z npm: 10.8.2
+2026-11-14T21:34:56.4215966Z yarn: 1.22.22
+2026-11-14T21:34:56.4216450Z ##[endgroup]
+2026-11-14T21:34:56.4988024Z [command]C:\Windows\system32\cmd.exe /D /S /C "C:\hostedtoolcache\windows\node\20.20.2\x64\npm.cmd config get cache"
+2026-11-14T21:34:56.8261393Z C:\npm\cache
+2026-11-14T21:34:57.1084364Z npm cache is not found

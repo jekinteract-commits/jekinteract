@@ -5,6 +5,75 @@ import { Sync, API } from '../lib/sync.js';
 import { SCREEN_COUNT } from '../lib/overlays.js';
 import { toast, confirmDialog } from '../lib/ui.js';
 
+/* ---------- Ekspor/Impor Konfigurasi ---------- */
+
+// Ikon "download" tidak ada di ikon bawaan, buat inline.
+const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>';
+
+// Kunci localStorage (prefix 'ji:') yang ikut di-export bersama server config.
+const LS_KEYS = ['settings', 'obs', 'music', 'tts', 'subathon', 'history'];
+
+/** Kumpulkan semua config: server (via API) + localStorage. */
+async function exportConfig() {
+  const server = await API.configExport();
+  const local = {};
+  LS_KEYS.forEach((k) => {
+    const v = Store.get(k, null);
+    if (v !== null) local[k] = v;
+  });
+  return {
+    app: 'jekinteract',
+    exportedAt: new Date().toISOString(),
+    server: server.server || {},
+    local
+  };
+}
+
+/** Download object sebagai file JSON. */
+function downloadJSON(obj, name) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/** Baca file JSON dan kembalikan parsed object. */
+function readJSONFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        resolve(JSON.parse(reader.result));
+      } catch (e) {
+        reject(new Error('File bukan JSON yang valid.'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Gagal membaca file.'));
+    reader.readAsText(file);
+  });
+}
+
+/** Impor payload ekspor: restore server config + localStorage. */
+async function importConfig(payload) {
+  const restored = [];
+  if (payload.server && Object.keys(payload.server).length) {
+    const r = await API.configImport({ server: payload.server });
+    if (r && r.restored) restored.push(r.restored + ' key server');
+  }
+  if (payload.local) {
+    Object.keys(payload.local).forEach((k) => {
+      Store.set(k, payload.local[k]);
+    });
+    restored.push(Object.keys(payload.local).length + ' key lokal');
+  }
+  return restored;
+}
+
 export default {
   id: 'settings',
   title: 'Pengaturan',
@@ -41,6 +110,10 @@ export default {
 
       '<section class="panel">' +
       '<div class="fh"><div class="fh-t"><h2>Data Lokal</h2><div class="sub">Interaksi, aktivitas, goals, dan pengaturan fitur tersimpan di browser ini dan server lokal.</div></div></div>' +
+      '<div class="row"><button type="button" class="btn" id="st-export">' + ICON_DOWNLOAD + 'Ekspor Konfigurasi</button>' +
+      '<button type="button" class="btn" id="st-import">' + icon('upload') + 'Impor Konfigurasi</button></div>' +
+      '<p class="hint">Ekspor menghasilkan file JSON berisi semua interaksi, aktivitas, music, subathon, goals, dan pengaturan fitur. Impor mengembalikan konfigurasi ke server dan browser ini.</p>' +
+      '<input type="file" id="st-file" accept="application/json,.json" style="display:none">' +
       '<button type="button" class="btn danger" id="st-reset">' + icon('reset') + 'Reset semua data lokal</button>' +
       '</section>' +
       '</div>'
@@ -154,6 +227,71 @@ export default {
     });
 
     /* ---- data lokal ---- */
+    // Ekspor konfigurasi
+    $('#st-export', root).addEventListener('click', async () => {
+      const btn = $('#st-export', root);
+      const original = btn.innerHTML;
+      btn.innerHTML = icon('loader') + 'Mengambil…';
+      btn.disabled = true;
+      try {
+        const payload = await exportConfig();
+        downloadJSON(payload, 'jekinteract-config-' + new Date().toISOString().slice(0, 10) + '.json');
+        toast('Konfigurasi diekspor.', 'ok');
+      } catch (e) {
+        toast('Gagal ekspor: ' + e.message, 'err');
+      } finally {
+        btn.innerHTML = original;
+        btn.disabled = false;
+      }
+    });
+
+    // Impor konfigurasi (pilih file dulu, lalu konfirmasi)
+    const fileInput = $('#st-file', root);
+    $('#st-import', root).addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      let payload;
+      try {
+        payload = await readJSONFile(file);
+      } catch (e) {
+        toast(e.message, 'err');
+        fileInput.value = '';
+        return;
+      }
+      if (!payload || typeof payload !== 'object') {
+        toast('File bukan payload konfigurasi yang valid.', 'err');
+        fileInput.value = '';
+        return;
+      }
+      const ok = await confirmDialog({
+        title: 'Impor Konfigurasi',
+        message: 'Konfigurasi dari "' + file.name + '" akan menggantikan interaksi, aktivitas, music, subathon, goals, dan pengaturan fitur yang ada. Tindakan ini tidak bisa dibatalkan.',
+        okText: 'Impor',
+        danger: true
+      });
+      if (!ok) {
+        fileInput.value = '';
+        return;
+      }
+      const btn = $('#st-import', root);
+      const original = btn.innerHTML;
+      btn.innerHTML = icon('loader') + 'Mengimpor…';
+      btn.disabled = true;
+      try {
+        const restored = await importConfig(payload);
+        toast('Konfigurasi diimpor (' + restored.join(', ') + ').', 'ok', 2500);
+        setTimeout(() => location.reload(), 900);
+      } catch (e) {
+        toast('Gagal impor: ' + e.message, 'err');
+      } finally {
+        btn.innerHTML = original;
+        btn.disabled = false;
+        fileInput.value = '';
+      }
+    });
+
+    // Reset data lokal
     $('#st-reset', root).addEventListener('click', async () => {
       const ok = await confirmDialog({
         title: 'Reset data lokal',

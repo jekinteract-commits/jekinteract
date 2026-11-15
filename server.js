@@ -928,6 +928,37 @@ async function api(req, res, pathname, q) {
     return json(res, 200, { ok: true });
   }
 
+  /* ---------- Config export / import ---------- */
+  // Ekspor semua konfigurasi yang disimpan server (state.json) dalam satu payload.
+  // Dipakai oleh dashboard untuk fitur "Ekspor Konfigurasi" (backup).
+  if (pathname === '/api/config/export' && m === 'GET') {
+    const keys = ['interactions', 'activities', 'music', 'subathonCfg', 'chatCfg',
+                  'gifterCfg', 'likesCfg', 'winlose', 'goals', 'subathon'];
+    const out = {};
+    keys.forEach((k) => { out[k] = state[k]; });
+    return json(res, 200, { ok: true, server: out });
+  }
+
+  // Impor konfigurasi dari payload ekspor. Hanya key yang diizinkan yang ditulis.
+  // Sinkron ke client via broadcast supaya overlay/dashboard langsung terbaru.
+  if (pathname === '/api/config/import' && m === 'POST') {
+    const body = await readJSON(req);
+    const src = (body && body.server) || {};
+    const allowed = ['interactions', 'activities', 'music', 'subathonCfg', 'chatCfg',
+                     'gifterCfg', 'likesCfg', 'winlose', 'goals', 'subathon'];
+    let count = 0;
+    allowed.forEach((k) => {
+      if (src[k] !== undefined) {
+        state[k] = src[k];
+        broadcast('state', { key: k, value: state[k] });
+        count++;
+      }
+    });
+    if (src.goals !== undefined) resetGoalCounters();
+    saveState();
+    return json(res, 200, { ok: true, restored: count });
+  }
+
   if (pathname === '/api/upload' && m === 'POST') return handleUpload(req, res, q);
   if (pathname === '/api/gifts' && m === 'GET') return serveGifts(res);
   if (pathname === '/api/tts/status' && m === 'GET') return json(res, 200, { available: !!MsEdgeTTS });
