@@ -1,6 +1,6 @@
 {
   "name": "jekinteract",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "description": "JekInteract - tools interaksi TikTok Live (fase UI). Tanpa dependency, jalankan dengan npm start.",
   "main": "electron/main.js",
   "private": true,
@@ -14,7 +14,7 @@
     "tunnel": "cloudflared tunnel --url http://localhost:3000",
     "electron": "electron .",
     "electron:dev": "electron . --inspect",
-    "build:win": "CI=true electron-builder --win --x64"
+    "build:win": "electron-builder --win --x64"
   },
   "engines": {
     "node": ">=16"
