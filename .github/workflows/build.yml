@@ -2,8 +2,7 @@ name: Build Windows EXE
 
 on:
   push:
-    branches: [ master ]        # trigger saat push ke branch master
-    tags:                       # tetap jalan juga saat push tag
+    tags:
       - 'v*'
   workflow_dispatch:  # bisa juga trigger manual dari tab Actions di GitHub
 
