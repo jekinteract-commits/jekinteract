@@ -1,7 +1,7 @@
 # JekInteract
 
 Tools interaksi TikTok Live (fase UI). Tema dark game arcade futuristik.
-Tanpa dependency: cukup Node.js 16 atau lebih baru.
+Butuh Node.js **20 atau lebih baru** (karena `tiktok-live-connector` v2 adalah modul ESM).
 
 ## Jalankan di Termux
 
@@ -34,10 +34,12 @@ Port lain: `PORT=4000 npm start`.
 
 ## Masih data demo / simulasi (menyusul bertahap)
 
-- Koneksi TikTok Live dan event asli (gift, like, komentar, follow, share)
 - Daftar gift asli (streamtoearn.io), soundboard asli (myinstants.com)
-- Request lagu YouTube, kontrol OBS WebSocket, simulasi keystroke ke keyboard
+- Request lagu YouTube
 - Leaderboard, komentar, dan lagu di overlay masih contoh
+
+> Koneksi TikTok Live, event asli (gift/like/komentar/follow/share), dan keystroke
+> asli sudah didukung. Lihat catatan penting di bawah.
 
 ## Struktur
 
@@ -104,4 +106,65 @@ Data aplikasi (pengaturan, upload, riwayat) disimpan di folder `data\` **di samp
 file `.exe`** saat memakai versi portable, jadi tidak hilang saat aplikasi ditutup.
 Kalau folder itu tidak bisa ditulis (misalnya `.exe` ditaruh di `Program Files`),
 aplikasi otomatis memakai `%APPDATA%\JekInteract\data`.
+
+## Trigger keystroke jalan di Chrome, tapi tidak di Roblox
+
+Ini bukan bug JavaScript, tapi pembatasan keamanan Windows (UIPI): **proses yang
+tidak elevated tidak boleh mengirim keyboard sintetis ke aplikasi yang dijalankan
+sebagai Administrator.** Jadi kalau Roblox di-*Run as administrator* sementara
+JekInteract tidak, keystroke-nya pasti dibuang Windows.
+
+Solusi (pilih salah satu):
+
+1. **Jalankan JekInteract sebagai Administrator** — klik kanan `JekInteract.exe`
+   → *Run as administrator*, atau buka **Pengaturan → Jalankan sebagai Administrator**
+   (akan muncul prompt UAC, lalu aplikasi restart sendiri). Kalau pakai `npm start`,
+   jalankan **terminal/CMD sebagai Administrator** dulu. Build `.exe` juga
+   memakai `requestedExecutionLevel: highestAvailable`, jadi akun Administrator
+   akan otomatis diminta izin saat membuka aplikasi.
+2. **Jalankan Roblox tanpa administrator** (klik kanan → hapus centang *Run as
+   administrator* / buka lewat Roblox Client biasa).
+
+Catatan tambahan:
+
+- Pastikan **jendela Roblox sedang fokus** saat event TikTok masuk. Keystroke
+  dikirim ke jendela depan (foreground).
+- Cek **Pengaturan → Keluar & Hak Administrator** atau form Interaksi → Trigger
+  Keystroke untuk melihat status mesin keystroke secara real-time.
+- Shortcut global untuk keluar: **Ctrl+Alt+Shift+Q**.
+
+## Connection: "Gagal — Library tiktok-live-connector tidak tersedia"
+
+Pada build lama, `server.js` memakai `require('tiktok-live-connector')`. Padahal
+`tiktok-live-connector` v2 adalah modul **ESM**, dan Electron 31 (Node 20) belum
+bisa `require()` modul ESM. Di browser/Node 22+ bisa, di `.exe` tidak — makanya
+muncul pesan itu.
+
+Versi terbaru sudah memperbaikinya dengan `import()` dinamis, dan detail error
+aslinya sekarang ditampilkan di halaman Connection. Pastikan Anda memakai build
+**v1.0.24 ke atas**. Kalau menjalankan dari source:
+
+```
+npm install
+npm start
+```
+
+## File `JekInteract.exe` tidak bisa dihapus ("File in Use")
+
+Menutup jendela **tidak** mematikan aplikasi — JekInteract sengaja tetap hidup di
+tray supaya overlay di OBS tetap jalan. Selama proses itu hidup, Windows mengunci
+`.exe` dan Explorer menolak menghapusnya.
+
+Cara keluar total (pilih salah satu):
+
+- Klik kanan ikon **JekInteract** di area tray (pojok kanan bawah) → **Keluar
+  (tutup server & helper)**;
+- Buka **Pengaturan → Keluar JekInteract**;
+- Tekan **Ctrl+Alt+Shift+Q** (shortcut global, tetap jalan walau jendela
+  disembunyikan);
+- Atau jalankan ulang `.exe` lalu pilih menu tray tersebut.
+
+Semua helper (PowerShell keyboard, cloudflared, koneksi TikTok) sekarang ikut
+dimatikan saat keluar, jadi tidak ada proses yatim yang mengunci file. Tunggu
+1–2 detik setelah keluar, lalu hapus folder/portable `.exe`-nya dengan aman.
 

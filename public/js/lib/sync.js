@@ -318,6 +318,9 @@ export const API = {
   }),
   tiktokDisconnect: () => json('/api/tiktok/disconnect', { method: 'POST' }),
   tiktokStatus: () => json('/api/tiktok/status'),
+  keystrokeStatus: () => json('/api/keystroke/status'),
+  appQuit: () => json('/api/app/quit', { method: 'POST' }),
+  restartAdmin: () => json('/api/app/restart-admin', { method: 'POST' }),
   play: (n, item) =>
     json('/api/screen/' + n + '/play', {
       method: 'POST',

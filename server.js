@@ -17,8 +17,37 @@ const { WebSocketServer, WebSocket: NodeWebSocket } = require('ws');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-let TikTokLiveConnection;
-try { ({ TikTokLiveConnection } = require('tiktok-live-connector')); } catch (_) { /* opsional */ }
+/* tiktok-live-connector v2.x adalah ESM murni ("type": "module").
+ * Build lama (Electron 31 / Node 20) belum mendukung require() pada modul ESM,
+ * jadi di .exe require() selalu gagal dan pengguna melihat pesan
+ * "Library tiktok-live-connector tidak tersedia". Gunakan import() dinamis
+ * dan simpan detail errornya supaya UI bisa menampilkan penyebab sebenarnya. */
+let TikTokLiveConnection = null;
+let tikTokImportError = '';
+let tikTokImportPromise = null;
+function loadTikTokConnector() {
+  if (!tikTokImportPromise) {
+    tikTokImportPromise = import('tiktok-live-connector')
+      .then((mod) => {
+        const Ctor = mod.TikTokLiveConnection ||
+          (mod.default && mod.default.TikTokLiveConnection) ||
+          mod.default;
+        if (typeof Ctor !== 'function') {
+          throw new Error('Export TikTokLiveConnection tidak ditemukan pada modul.');
+        }
+        TikTokLiveConnection = Ctor;
+        tikTokImportError = '';
+        return Ctor;
+      })
+      .catch((e) => {
+        tikTokImportError = (e && e.message) ? String(e.message) : String(e);
+        TikTokLiveConnection = null;
+        console.warn('[tiktok] gagal memuat tiktok-live-connector: ' + tikTokImportError);
+        return null;
+      });
+  }
+  return tikTokImportPromise;
+}
 
 /* @nut-tree/nut-js — opsional, hanya aktif di Windows (npm install @nut-tree/nut-js) */
 let nutKeyboard = null;
@@ -968,8 +997,34 @@ async function api(req, res, pathname, q) {
 
   if (pathname === '/api/tiktok/connect' && m === 'POST') return tiktokConnect(req, res);
   if (pathname === '/api/tiktok/disconnect' && m === 'POST') return tiktokDisconnect(res);
-  if (pathname === '/api/tiktok/status' && m === 'GET') return json(res, 200, tiktokStatus());
+  if (pathname === '/api/tiktok/status' && m === 'GET') {
+    await loadTikTokConnector();
+    return json(res, 200, tiktokStatus());
+  }
   if (pathname === '/api/live/stats' && m === 'GET') return json(res, 200, liveStatsPayload());
+  if (pathname === '/api/keystroke/status' && m === 'GET') return json(res, 200, keystrokeStatus());
+
+  /* ---- Kontrol aplikasi (khusus build Electron) ---- */
+  if (pathname === '/api/app/quit' && m === 'POST') {
+    json(res, 200, { ok: true, message: 'Menutup JekInteract...' });
+    setTimeout(() => {
+      if (typeof global.__JEK_QUIT === 'function') global.__JEK_QUIT();
+      else process.exit(0); // fallback saat dijalankan lewat npm start
+    }, 150);
+    return;
+  }
+  if (pathname === '/api/app/restart-admin' && m === 'POST') {
+    const can = typeof global.__JEK_RESTART_ADMIN === 'function';
+    if (!can) {
+      return json(res, 400, {
+        ok: false,
+        error: 'Fitur ini hanya tersedia di aplikasi JekInteract (.exe). Jalankan .exe lewat klik kanan → Run as administrator, atau buka terminal sebagai Administrator lalu jalankan npm start.'
+      });
+    }
+    json(res, 200, { ok: true, message: 'Meminta izin Administrator...' });
+    setTimeout(() => global.__JEK_RESTART_ADMIN(), 150);
+    return;
+  }
 
   if (pathname === '/api/keystroke' && m === 'POST') {
     const body = await readJSON(req);
@@ -989,10 +1044,12 @@ async function api(req, res, pathname, q) {
     const eventLabel = linkedActs.length
       ? [...new Set(linkedActs.map((a) => whenDetailLabel(a.when)))].join(', ')
       : '—';
+    const ks = keystrokeStatus();
+    const warning = ks.elevatedTargetBlocked ? ks.hint : '';
 
     if (!keystrokeAvailable()) {
       console.log('AKTIVITAS : Test Play - ' + intName + ' - ' + keyLabel + ' - ' + eventLabel + ' - Screen ' + intScreen + ' [simulasi]');
-      return json(res, 200, { ok: true, simulated: true, message: 'Mesin keystroke tidak tersedia di perangkat ini — simulasi saja.' });
+      return json(res, 200, { ok: true, simulated: true, message: 'Mesin keystroke tidak tersedia di perangkat ini — simulasi saja.', warning });
     }
     const delayMs  = delaySec * 1000;
     const delayTag = delaySec > 0 ? ' [delay ' + delaySec + 's]' : '';
@@ -1002,11 +1059,11 @@ async function api(req, res, pathname, q) {
       setTimeout(() => {
         fireKeystrokes(lines).catch((e) => console.warn('[keystroke] gagal (delay):', e.message));
       }, delayMs);
-      return json(res, 200, { ok: true, fired: lines, delayed: delaySec });
+      return json(res, 200, { ok: true, fired: lines, delayed: delaySec, warning });
     }
     try {
       await fireKeystrokes(lines);
-      return json(res, 200, { ok: true, fired: lines });
+      return json(res, 200, { ok: true, fired: lines, warning });
     } catch (e) {
       return json(res, 500, { ok: false, error: e.message });
     }
@@ -1405,7 +1462,14 @@ function processLikeEvent(data) {
 }
 
 function tiktokStatus() {
-  return { state: tiktokState, username: tiktokUser, error: tiktokError, available: !!TikTokLiveConnection };
+  return {
+    state: tiktokState,
+    username: tiktokUser,
+    error: tiktokError,
+    available: !!TikTokLiveConnection,
+    importError: tikTokImportError,
+    loading: !TikTokLiveConnection && !tikTokImportError
+  };
 }
 
 function broadcastTiktok(event, data) {
@@ -1818,11 +1882,68 @@ function psFireLine(line) {
   });
 }
 
+/**
+ * Cek apakah proses JekInteract berjalan dengan hak Administrator.
+ * `net session` hanya sukses (exit 0) bila token proses elevated.
+ * Hasil di-cache karena tidak mungkin berubah selama proses hidup.
+ */
+let _isElevated = null;
+function isRunningElevated() {
+  if (_isElevated !== null) return _isElevated;
+  if (process.platform !== 'win32') { _isElevated = false; return false; }
+  try {
+    const r = spawnSync('net', ['session'], { windowsHide: true, stdio: 'ignore' });
+    _isElevated = r.status === 0;
+  } catch (_) {
+    _isElevated = false;
+  }
+  return _isElevated;
+}
+
 /** Apakah mesin keystroke asli tersedia di platform ini? */
 function keystrokeAvailable() {
   if (nutKeyboard && nutKey) return true;                       // nut.js
   if (process.platform === 'win32' && !IS_WINE && !psFailed) return true; // helper PS
   return false;
+}
+
+function keystrokeStatus() {
+  const available = keystrokeAvailable();
+  const elevated = isRunningElevated();
+  const elevatedTargetBlocked = process.platform === 'win32' && !IS_WINE && available && !elevated;
+  let hint = '';
+  if (!available) {
+    hint = 'Mesin keystroke tidak tersedia di perangkat ini. Test Play hanya berupa simulasi.';
+  } else if (elevatedTargetBlocked) {
+    hint = 'JekInteract berjalan TANPA hak Administrator. Windows memblokir keystroke ke aplikasi yang dijalankan sebagai Administrator (contoh: Roblox "Run as administrator"). Klik "Jalankan sebagai Administrator" di Pengaturan, atau jalankan Roblox tanpa administrator.';
+  } else {
+    hint = 'Mesin keystroke aktif. Pastikan jendela target (Roblox/game) sedang fokus saat event TikTok masuk.';
+  }
+  return {
+    available,
+    platform: process.platform,
+    wine: IS_WINE,
+    elevated,
+    nutjs: !!(nutKeyboard && nutKey),
+    powershell: process.platform === 'win32' && !IS_WINE,
+    elevatedTargetBlocked,
+    hint
+  };
+}
+
+let _warnedElevation = false;
+function warnElevationOnce() {
+  if (_warnedElevation) return;
+  _warnedElevation = true;
+  console.warn('[keystroke] ' + keystrokeStatus().hint);
+}
+
+/** Matikan helper PowerShell saat aplikasi ditutup supaya tidak ada proses yatim. */
+function shutdownKeystrokeHelper() {
+  try { if (psProc && psProc.stdin) psProc.stdin.write('QUIT\n'); } catch (_) {}
+  try { if (psProc && !psProc.killed) psProc.kill(); } catch (_) {}
+  psProc = null;
+  psOutBuf = '';
 }
 
 /**
@@ -1867,6 +1988,7 @@ async function execKeystrokeLine(line) {
  * Dipanggil dari runActivities() saat interaction.triggers.keystroke aktif.
  */
 async function fireKeystrokes(lines) {
+  if (process.platform === 'win32' && !IS_WINE && !isRunningElevated()) warnElevationOnce();
   for (const line of lines) {
     try {
       await execKeystrokeLine(line);
@@ -1886,7 +2008,14 @@ function tiktokCleanup() {
 }
 
 async function tiktokConnect(req, res) {
-  if (!TikTokLiveConnection) return json(res, 501, { ok: false, error: 'Library tiktok-live-connector tidak tersedia.' });
+  const Connector = await loadTikTokConnector();
+  if (!Connector) {
+    return json(res, 501, {
+      ok: false,
+      error: 'Library tiktok-live-connector tidak tersedia.' + (tikTokImportError ? ' Detail: ' + tikTokImportError : ''),
+      importError: tikTokImportError
+    });
+  }
 
   const body = await readJSON(req);
   const raw = String(body.username || '').trim().replace(/^@/, '');
@@ -1903,7 +2032,7 @@ async function tiktokConnect(req, res) {
   broadcastTiktok('connecting', { username: raw });
   json(res, 200, { ok: true, username: raw }); // jawab request segera, connect async
 
-  const client = new TikTokLiveConnection(raw, {});
+  const client = new Connector(raw, {});
   tiktokClient = client;
 
   // — Event dasar —
@@ -3235,6 +3364,10 @@ function startMainServer(port, retries) {
       try { global.__JEK_ON_SERVER_READY(port); } catch (_) { /* abaikan */ }
     }
     banner(port);
+    global.__JEK_SERVER = server;
+    // Muat library TikTok sedini mungkin supaya halaman Connection langsung
+    // tahu apakah library tersedia (dan menampilkan detail error bila tidak).
+    loadTikTokConnector();
     // Auto-start Cloudflare tunnel setelah server siap (defer agar load halaman
     // pertama tidak diblokir oleh probe cloudflared).
     setTimeout(() => startTunnel(port), 1500);
@@ -3246,9 +3379,29 @@ function startMainServer(port, retries) {
   });
 }
 
+/**
+ * Bersihkan semua resource sebelum proses keluar. Dipakai oleh:
+ *  - Electron main process lewat global.__JEK_SHUTDOWN()
+ *  - endpoint /api/app/quit
+ *  - SIGINT / SIGTERM saat dijalankan lewat npm start
+ * Tanpa ini, helper PowerShell/cloudflared bisa hidup sendiri dan membuat
+ * file .exe tetap terkunci di Explorer.
+ */
+function shutdownAll() {
+  try { shutdownKeystrokeHelper(); } catch (_) {}
+  try { if (tunnelProc && !tunnelProc.killed) tunnelProc.kill(); } catch (_) {}
+  try { tiktokCleanup(); } catch (_) {}
+  try { if (global.__JEK_SERVER) global.__JEK_SERVER.close(); } catch (_) {}
+}
+global.__JEK_SHUTDOWN = shutdownAll;
+
 process.on('SIGINT', () => {
   console.log('\n  Server dihentikan. Sampai jumpa!');
-  try { if (psProc && psProc.stdin) psProc.stdin.write('QUIT\n'); } catch (_) {}
+  shutdownAll();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  shutdownAll();
   process.exit(0);
 });
 

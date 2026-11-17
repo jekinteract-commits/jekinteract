@@ -75,6 +75,22 @@ export default {
       const busy = tk.state === 'connecting';
       const err = tk.state === 'error';
 
+      // Library gagal dimuat (umum di build lama: require() pada modul ESM).
+      // Tampilkan detail error, jangan cuma tulis "tidak tersedia".
+      if (tk.available === false && !tk.loading) {
+        $('#cn-chip', root).innerHTML = '<span class="st off"><i></i>Library TikTok error</span>';
+        goBtn.disabled = true;
+        stopBtn.disabled = true;
+        userEl.readOnly = true;
+        alertBox.innerHTML = alertHTML(
+          'err',
+          'Library TikTok tidak tersedia',
+          (tk.importError ? 'Detail: ' + esc(tk.importError) + '. ' : '') +
+          'Perbarui ke build terbaru (v1.0.24+), atau jalankan dari source dengan <code>npm install &amp;&amp; npm start</code>.'
+        );
+        return;
+      }
+
       $('#cn-chip', root).innerHTML =
         online ? '<span class="st on"><i></i>Terhubung @' + esc(tk.username) + '</span>'
         : busy  ? '<span class="st wait"><i></i>Menghubungkan @' + esc(tk.username) + '</span>'

@@ -116,6 +116,14 @@ export default {
       '<input type="file" id="st-file" accept="application/json,.json" style="display:none">' +
       '<button type="button" class="btn danger" id="st-reset">' + icon('reset') + 'Reset semua data lokal</button>' +
       '</section>' +
+
+      '<section class="panel">' +
+      '<div class="fh"><div class="fh-t"><h2>Keluar & Hak Administrator</h2><div class="sub">Tutup semua proses JekInteract (termasuk helper keyboard & tunnel) agar file .exe bisa dihapus/diganti.</div></div></div>' +
+      '<div id="st-ks-status"><span class="muted">Mendeteksi mesin keystroke…</span></div>' +
+      '<p class="hint">Jika Roblox dijalankan dengan <b>Run as administrator</b>, JekInteract juga harus elevated. Windows memblokir keystroke dari proses biasa ke proses Administrator. Shortcut keluar global: <b>Ctrl+Alt+Shift+Q</b>.</p>' +
+      '<div class="row"><button type="button" class="btn" id="st-admin">' + icon('bolt') + 'Jalankan sebagai Administrator</button>' +
+      '<button type="button" class="btn danger" id="st-quit">' + icon('power') + 'Keluar JekInteract</button></div>' +
+      '</section>' +
       '</div>'
     );
   },
@@ -308,6 +316,55 @@ export default {
       Store.clearAll();
       toast('Data lokal dihapus. Memuat ulang...', 'ok', 1500);
       setTimeout(() => location.reload(), 900);
+    });
+
+    /* ---- status keystroke & kontrol aplikasi ---- */
+    API.keystrokeStatus().then((s) => {
+      const box = $('#st-ks-status', root);
+      if (!box) return;
+      if (!s.available) {
+        box.innerHTML = '<span class="st off"><i></i>Keystroke tidak tersedia (simulasi)</span>';
+      } else if (s.elevatedTargetBlocked) {
+        box.innerHTML = '<span class="st wait"><i></i>Keystroke aktif, tapi belum Administrator</span>' +
+          '<p class="hint" style="color:#fbbf24">' + esc(s.hint) + '</p>';
+      } else {
+        box.innerHTML = '<span class="st on"><i></i>Keystroke aktif' + (s.elevated ? ' (Administrator)' : '') + '</span>' +
+          '<p class="hint">' + esc(s.hint) + '</p>';
+      }
+    }).catch(() => {
+      const box = $('#st-ks-status', root);
+      if (box) box.innerHTML = '<span class="muted sm-t">Status keystroke gagal dideteksi.</span>';
+    });
+
+    $('#st-admin', root).addEventListener('click', async () => {
+      const ok = await confirmDialog({
+        title: 'Jalankan sebagai Administrator',
+        message: 'JekInteract akan ditutup lalu dibuka ulang dengan izin Administrator. Klik Ya pada prompt UAC Windows. Ini diperlukan agar keystroke bisa masuk ke Roblox yang dijalankan sebagai Administrator.',
+        okText: 'Restart Admin'
+      });
+      if (!ok) return;
+      try {
+        await API.restartAdmin();
+        toast('Menunggu konfirmasi UAC…', 'info', 4000);
+      } catch (e) {
+        toast(e.message, 'err', 6000);
+      }
+    });
+
+    $('#st-quit', root).addEventListener('click', async () => {
+      const ok = await confirmDialog({
+        title: 'Keluar JekInteract',
+        message: 'Menutup JekInteract akan mematikan server, overlay, helper keyboard, dan tunnel. Setelah proses benar-benar keluar, file JekInteract.exe bisa dihapus atau diganti.',
+        okText: 'Keluar',
+        danger: true
+      });
+      if (!ok) return;
+      try {
+        await API.appQuit();
+        toast('JekInteract ditutup. Jika file masih terkunci, tunggu 1–2 detik.', 'ok', 4000);
+      } catch (e) {
+        toast('Gagal keluar lewat dashboard. Gunakan tray → Keluar atau Ctrl+Alt+Shift+Q.', 'err', 6000);
+      }
     });
 
     return () => d.run();

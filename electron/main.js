@@ -12,11 +12,12 @@
  *  6. Saat app quit → server otomatis mati (sama process)
  */
 
-const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain, globalShortcut } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain, globalShortcut, dialog } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const os = require('os');
+const { spawnSync, execFile } = require('child_process');
 
 // ── Deteksi Wine ──────────────────────────────────────────────────────────────
 // Winlator/BoxedWine (Android) butuh setelan GPU khusus (OpenGL/gladio).
@@ -123,6 +124,66 @@ let tray = null;
 let serverPort = 3000;
 let serverReady = false;
 let tunnelUrl = '';
+
+// ── Keluar & hak Administrator ────────────────────────────────────────────────
+const QUIT_SHORTCUT = 'Ctrl+Alt+Shift+Q';
+
+function isElevated() {
+  if (process.platform !== 'win32') return false;
+  try {
+    return spawnSync('net', ['session'], { windowsHide: true, stdio: 'ignore' }).status === 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Tutup server, helper keystroke, tunnel, lalu matikan aplikasi. */
+function shutdownAndQuit() {
+  try { if (typeof global.__JEK_SHUTDOWN === 'function') global.__JEK_SHUTDOWN(); } catch (_) {}
+  app.quit();
+}
+
+/**
+ * Restart aplikasi dengan UAC elevation. Diperlukan supaya keystroke sintetis
+ * bisa masuk ke game/app yang dijalankan sebagai Administrator (Roblox).
+ */
+function restartAsAdmin() {
+  if (process.platform !== 'win32') {
+    return { ok: false, error: 'Fitur ini hanya untuk Windows.' };
+  }
+  if (isElevated()) {
+    return { ok: false, error: 'JekInteract sudah berjalan sebagai Administrator.' };
+  }
+
+  // Untuk packaged app, process.execPath adalah JekInteract.exe.
+  // Buang argumen yang merupakan path exe itu sendiri supaya tidak dobel.
+  const args = process.argv.slice(1).filter((a) => {
+    try { return path.resolve(a) !== path.resolve(process.execPath); } catch (_) { return true; }
+  });
+  const psCmd =
+    '$p = ' + JSON.stringify(process.execPath) + '; ' +
+    '$a = ' + JSON.stringify(args) + '; ' +
+    'Start-Process -FilePath $p -ArgumentList $a -Verb RunAs';
+
+  execFile('powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psCmd],
+    { windowsHide: true },
+    (err) => {
+      if (err) {
+        log('[electron] gagal meminta elevasi: ' + err.message);
+        dialog.showErrorBox('JekInteract - Gagal Restart Admin',
+          'Tidak bisa meminta izin Administrator:\n\n' + err.message +
+          '\n\nAlternatif: klik kanan JekInteract.exe → Run as administrator.');
+      }
+    });
+
+  setTimeout(shutdownAndQuit, 500);
+  return { ok: true };
+}
+
+// Dipanggil server.js lewat endpoint /api/app/quit dan /api/app/restart-admin.
+global.__JEK_QUIT = shutdownAndQuit;
+global.__JEK_RESTART_ADMIN = restartAsAdmin;
 
 // ── Hotkey global Win/Lose (Numpad + / -) ─────────────────────────────────────
 // Didaftarkan hanya saat halaman Win Lose Bar terbuka, supaya Numpad tidak
@@ -450,7 +511,14 @@ function createTray(port) {
       click: () => shell.openExternal('http://localhost:' + port)
     },
     { type: 'separator' },
-    { label: 'Keluar', click: () => app.quit() }
+    {
+      label: 'Jalankan sebagai Administrator…',
+      click: () => {
+        const r = restartAsAdmin();
+        if (!r.ok) dialog.showErrorBox('JekInteract', r.error || 'Tidak bisa restart sebagai Administrator.');
+      }
+    },
+    { label: 'Keluar (tutup server & helper)', click: shutdownAndQuit }
   ]);
 
   tray.setContextMenu(menu);
@@ -500,6 +568,15 @@ app.whenReady().then(async () => {
       ' portableDir=' + (process.env.PORTABLE_EXECUTABLE_DIR || '-'));
   log('[electron] file log: ' + (LOG_FILES.length ? LOG_FILES.join(' | ') : '(tidak ada yang bisa ditulis)'));
 
+  // Shortcut keluar global — berguna saat window disembunyikan di tray dan
+  // pengguna ingin menghapus/mengganti file .exe (file sedang dikunci proses).
+  try {
+    const ok = globalShortcut.register(QUIT_SHORTCUT, shutdownAndQuit);
+    log('[electron] shortcut keluar ' + QUIT_SHORTCUT + ': ' + (ok ? 'aktif' : 'gagal didaftarkan'));
+  } catch (e) {
+    log('[electron] gagal mendaftarkan shortcut keluar: ' + e.message);
+  }
+
   try {
     const port = await startServer();
 
@@ -515,7 +592,6 @@ app.whenReady().then(async () => {
     }
   } catch (e) {
     log('[electron] gagal start: ' + (e && e.stack ? e.stack : e));
-    const { dialog } = require('electron');
     dialog.showErrorBox('JekInteract - Gagal Start',
       'Server tidak bisa dijalankan:\n\n' + (e && e.message ? e.message : e) + '\n\n' +
       'Log lengkap:\n' + (LOG_FILES.length ? LOG_FILES.join('\n') : '(tidak tersedia)'));
@@ -539,5 +615,8 @@ app.on('will-quit', () => {
 });
 
 app.on('before-quit', () => {
-  // Server jalan di main process — otomatis mati saat app quit
+  // Server jalan di main process, tapi helper PowerShell/cloudflared adalah
+  // child process yang tidak otomatis mati di Windows. Matikan eksplisit supaya
+  // file .exe tidak tetap "in use" setelah aplikasi ditutup.
+  try { if (typeof global.__JEK_SHUTDOWN === 'function') global.__JEK_SHUTDOWN(); } catch (_) {}
 });

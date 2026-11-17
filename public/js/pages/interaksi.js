@@ -142,6 +142,9 @@ export default {
     };
     paintAll();
 
+    // Status keystroke (admin / mesin aktif) dipakai di form Interaksi.
+    API.keystrokeStatus().then((s) => { ksStatus = s; }).catch(() => { ksStatus = null; });
+
     // Fetch state langsung saat mount — fix untuk Cloudflare/tunnel di mana
     // SSE hello bisa terlambat sehingga Sync.state masih kosong saat render pertama.
     Promise.all([
@@ -362,6 +365,7 @@ async function testPlay(it) {
       } else {
         toast('Keystroke gagal: ' + (kd.error || 'unknown'), 'err');
       }
+      if (kd.warning) toast(kd.warning, 'warn', 6500);
     } catch (e) {
       toast('Keystroke error: ' + e.message, 'err');
     }
@@ -443,6 +447,22 @@ function keysInfoHTML(data) {
   return data.keystrokes.map((k) => '<span class="chip c-key">' + esc(k) + '</span>').join('');
 }
 
+/* Status mesin keystroke (diambil dari /api/keystroke/status). */
+let ksStatus = null;
+function keystrokeHintHTML() {
+  if (!ksStatus) {
+    return '<p class="hint small-dim" id="if-ks-hint">Mendeteksi mesin keystroke…</p>';
+  }
+  if (!ksStatus.available) {
+    return '<p class="hint" id="if-ks-hint" style="color:#fca5a5">⚠ ' + esc(ksStatus.hint) + '</p>';
+  }
+  if (ksStatus.elevatedTargetBlocked) {
+    return '<p class="hint" id="if-ks-hint" style="color:#fbbf24">⚠ ' + esc(ksStatus.hint) +
+      ' <button type="button" class="btn sm" data-ks-admin>' + icon('bolt') + 'Jalankan sebagai Administrator</button></p>';
+  }
+  return '<p class="hint" id="if-ks-hint" style="color:#86efac">✓ ' + esc(ksStatus.hint) + '</p>';
+}
+
 function triggerBlockHTML(t, d) {
   const on = d.triggers[t.k];
   let body = '';
@@ -508,7 +528,7 @@ function openInteractionForm(existing, onSave) {
     '<div class="fgrp" data-f="trg"><span class="lbl">Action Trigger</span>' +
     '<p class="hint">Centang satu atau lebih aksi yang dijalankan saat interaksi dipicu.</p>' +
     '<div class="trgs">' + TRIGGERS.map((t) => triggerBlockHTML(t, data)).join('') + '</div>' +
-    '<p class="hint small-dim" style="font-size:0.85em;color:#666; margin-top:4px;">⚠ Keystroke hanya support di Windows dengan Electron build. Di Linux/Termux hasilnya simulasi saja.</p>' +
+    keystrokeHintHTML() +
     '</div></div>' +
 
     '<div class="fgrp"><label class="lbl" for="if-vol">Volume Media</label>' +
@@ -548,6 +568,26 @@ function openInteractionForm(existing, onSave) {
   };
   ['image', 'video', 'audio'].forEach(refreshMedia);
   refreshKeys();
+
+  m.body.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-ks-admin]');
+    if (!btn) return;
+    const ok = await confirmDialog({
+      title: 'Jalankan sebagai Administrator',
+      message: 'JekInteract akan ditutup lalu dibuka ulang dengan izin Administrator. Windows akan menampilkan prompt UAC — klik Ya. Setelah itu keystroke bisa masuk ke Roblox yang dijalankan sebagai Administrator.',
+      okText: 'Restart Admin',
+      danger: false
+    });
+    if (!ok) return;
+    btn.disabled = true;
+    try {
+      await API.restartAdmin();
+      toast('Menunggu konfirmasi UAC…', 'info', 4000);
+    } catch (err) {
+      btn.disabled = false;
+      toast(err.message, 'err', 6000);
+    }
+  });
 
   const showError = (msg, selector) => {
     const box = m.$('#if-err');
