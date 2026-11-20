@@ -119,9 +119,9 @@ Solusi (pilih salah satu):
 1. **Jalankan JekInteract sebagai Administrator** — klik kanan `JekInteract.exe`
    → *Run as administrator*, atau buka **Pengaturan → Jalankan sebagai Administrator**
    (akan muncul prompt UAC, lalu aplikasi restart sendiri). Kalau pakai `npm start`,
-   jalankan **terminal/CMD sebagai Administrator** dulu. Build `.exe` juga
-   memakai `requestedExecutionLevel: highestAvailable`, jadi akun Administrator
-   akan otomatis diminta izin saat membuka aplikasi.
+   jalankan **terminal/CMD sebagai Administrator** dulu. Build `.exe` memakai
+   `asInvoker`, jadi pemakaian biasa **tidak memunculkan UAC** dan tidak perlu
+   klik kanan — Administrator hanya dipakai kalau targetnya memang elevated.
 2. **Jalankan Roblox tanpa administrator** (klik kanan → hapus centang *Run as
    administrator* / buka lewat Roblox Client biasa).
 
@@ -143,31 +143,26 @@ Catatan tambahan:
   Keystroke untuk melihat status mesin keystroke secara real-time.
 - Shortcut global untuk keluar: **Ctrl+Alt+Shift+Q**.
 
-## Keystroke setara keyboard fisik (jalur driver)
+## Keystroke setara keyboard fisik (jalur driver — opsional)
 
-Secara default keystroke dikirim lewat helper PowerShell (`keybd_event`). Windows
-menandai input ini sebagai *injected*, jadi sebagian aplikasi/game bisa mengabaikannya.
+Secara default keystroke dikirim lewat helper PowerShell (`keybd_event`). Untuk
+aplikasi/game biasa (mis. Roblox yang dibuka normal) input ini sudah diterima,
+**tanpa driver dan tanpa Administrator** — tidak ada dialog, UAC, atau restart.
 
 Kalau `interception.dll` tersedia, JekInteract otomatis memakai **driver keyboard
 Interception** — tombol dikirim lewat driver filter sehingga tampak seperti keyboard
 fisik. Jalur lama tetap dipakai kalau driver tidak ada, jadi fitur lain tidak berubah.
 
-**Tidak ada langkah manual.** Saat `.exe` pertama kali dibuka, JekInteract otomatis:
-
-1. Mendeteksi bahwa driver belum terpasang → menampilkan satu dialog persetujuan.
-2. Meminta izin **UAC sekali** (Windows), lalu memasang driver sendiri — tanpa CMD / PowerShell.
-3. Meminta **restart PC sekali** supaya driver aktif.
-
-Setelah restart itu, setiap kali membuka `.exe` langsung berfungsi: tidak ada dialog,
-tidak ada perintah, tidak ada langkah tambahan — persis seperti aplikasi lain.
+Driver bersifat opsional dan **tidak dipasang otomatis saat startup**. Kalau mau
+memasangnya, buka menu tray → **Pasang ulang driver keyboard…**, lalu setujui UAC.
+Setelah install selesai, restart PC sekali supaya driver aktif.
 
 Catatan:
-- `.exe` meminta izin Administrator (UAC) saat dibuka — itu wajib agar aplikasi bisa
-  memakai driver tingkat keyboard. Cukup klik **Yes**, tidak perlu CMD apa pun.
-- Kalau driver sudah terpasang, setup dilewati otomatis.
+- `.exe` tidak meminta UAC saat dibuka (`asInvoker`). Keystroke biasa langsung jalan.
+- Administrator tetap dibutuhkan kalau targetnya di-*Run as administrator* —
+  gunakan tombol **Jalankan sebagai Administrator** di Pengaturan.
 - Kalau install gagal (mis. sebagian Windows 11 menolak driver lama), aplikasi tetap
-  berjalan memakai keystroke mode lama — fitur lain tidak berubah. Pasang ulang bisa
-  lewat menu tray **Pasang ulang driver keyboard…**.
+  berjalan memakai keystroke mode lama — fitur lain tidak berubah.
 - Cek log (`jekinteract.log`): harus ada `[keystroke-driver] helper dimulai (...interception.dll)`.
   Kalau yang muncul `[keystroke] helper PowerShell dimulai`, berarti driver belum aktif.
 

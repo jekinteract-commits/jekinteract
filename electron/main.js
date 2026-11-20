@@ -185,26 +185,11 @@ function restartAsAdmin() {
 global.__JEK_QUIT = shutdownAndQuit;
 global.__JEK_RESTART_ADMIN = restartAsAdmin;
 
-// ── Auto-install driver keyboard (Interception) ───────────────────────────────
-// Supaya keystroke setara keyboard fisik, driver harus terpasang di Windows.
-// Semua langkah (UAC + install) dijalankan otomatis dari .exe — pengguna tidak
-// perlu membuka CMD / PowerShell. Dilakukan sekali; setelah driver ada, tiap
-// kali buka .exe langsung berfungsi seperti biasa.
+// ── Driver keyboard opsional (Interception) ───────────────────────────────────
+// Keystroke sudah berfungsi lewat helper PowerShell (keybd_event) / nut.js tanpa
+// driver dan tanpa Administrator. Driver Interception hanya dipasang bila user
+// memilih manual lewat menu tray "Pasang ulang driver keyboard…".
 const INTERCEPTION_SETUP_ARG = '--interception-setup';
-
-function setupMarkerPath() {
-  try { return path.join(app.getPath('userData'), 'interception-setup.json'); }
-  catch (_) { return path.join(os.tmpdir(), 'jekinteract-interception-setup.json'); }
-}
-function readSetupMarker() {
-  try { return JSON.parse(fs.readFileSync(setupMarkerPath(), 'utf8')); } catch (_) { return {}; }
-}
-function writeSetupMarker(obj) {
-  try {
-    fs.mkdirSync(path.dirname(setupMarkerPath()), { recursive: true });
-    fs.writeFileSync(setupMarkerPath(), JSON.stringify(obj));
-  } catch (_) {}
-}
 
 /** Cek apakah driver Interception sudah terpasang di sistem. */
 function interceptionDriverInstalled() {
@@ -303,8 +288,13 @@ function runInterceptionInstaller() {
 }
 
 /**
- * Pastikan driver keyboard siap sebelum server jalan.
- * Mengembalikan true bila startup harus dihentikan (sedang restart/elevasi).
+ * Startup normal langsung jalan: TANPA dialog "Siapkan keyboard", tanpa UAC,
+ * tanpa restart. Keystroke memakai helper PowerShell (keybd_event) / nut.js yang
+ * bekerja tanpa driver dan tanpa hak Administrator.
+ *
+ * Driver Interception hanya diproses saat mode install manual aktif (dipicu
+ * dari menu tray "Pasang ulang driver keyboard…").
+ * Mengembalikan true bila startup harus dihentikan (sedang install/elevasi).
  */
 async function ensureKeyboardDriverSetup() {
   if (process.platform !== 'win32' || IS_WINE) return false;
@@ -312,35 +302,15 @@ async function ensureKeyboardDriverSetup() {
   const inSetupMode = process.argv.includes(INTERCEPTION_SETUP_ARG);
   log('[setup] cek driver — elevated=' + isElevated() + ', modeInstall=' + inSetupMode);
 
+  // Jangan pernah mengganggu peluncuran biasa dengan prompt/UAC.
+  if (!inSetupMode) {
+    log('[setup] startup biasa — setup driver dilewati (mode keystroke standar aktif)');
+    return false;
+  }
+
   if (interceptionDriverInstalled()) {
     log('[setup] driver keyboard sudah terpasang — lewati setup');
     return false;
-  }
-
-  // Sudah pernah dicoba / dilewati → jangan mengganggu tiap kali dibuka.
-  // Mode install (dari tray "Pasang ulang...") sengaja mengabaikan marker.
-  const marker = readSetupMarker();
-  if (!inSetupMode && (marker.attemptedAt || marker.skippedAt)) {
-    log('[setup] setup sebelumnya sudah dicoba — lewati auto-install');
-    return false;
-  }
-
-  // Minta persetujuan sekali pada peluncuran biasa.
-  if (!inSetupMode) {
-    const choice = dialog.showMessageBoxSync({
-      type: 'info',
-      buttons: ['Pasang sekarang (disarankan)', 'Lewati'],
-      defaultId: 0,
-      cancelId: 1,
-      title: 'JekInteract - Siapkan keyboard',
-      message: 'JekInteract perlu menyiapkan driver keyboard sekali ini.',
-      detail: 'Klik "Pasang sekarang" → driver dipasang otomatis (izin Windows / UAC) → PC restart sekali.\nSetelah itu cukup buka .exe; semua fitur langsung berfungsi tanpa CMD.'
-    });
-    if (choice !== 0) {
-      writeSetupMarker({ skippedAt: Date.now() });
-      log('[setup] user melewati setup driver');
-      return false;
-    }
   }
 
   // Butuh hak Administrator untuk memasang driver. Kalau belum elevated,
@@ -351,9 +321,8 @@ async function ensureKeyboardDriverSetup() {
     return true;
   }
 
-  // Sudah elevated (manifest .exe memang requireAdministrator) → pasang langsung.
+  // Sudah elevated → pasang langsung (jalur manual dari tray).
   const res = await runInterceptionInstaller();
-  writeSetupMarker({ attemptedAt: Date.now(), ok: res.ok });
 
   if (res.ok) {
     const choice = dialog.showMessageBoxSync({
@@ -363,7 +332,7 @@ async function ensureKeyboardDriverSetup() {
       cancelId: 1,
       title: 'JekInteract - Siapkan keyboard',
       message: 'Driver keyboard berhasil dipasang.',
-      detail: 'PC perlu di-restart sekali supaya driver aktif.\nSetelah itu cukup buka JekInteract.exe — semua fitur langsung berfungsi tanpa CMD / langkah tambahan.'
+      detail: 'PC perlu di-restart sekali supaya driver aktif.\nSetelah itu cukup buka JekInteract.exe.'
     });
     if (choice === 0) {
       try { spawnSync('shutdown', ['/r', '/t', '5'], { windowsHide: true, stdio: 'ignore' }); } catch (_) {}
@@ -783,9 +752,8 @@ app.whenReady().then(async () => {
     log('[electron] gagal mendaftarkan shortcut keluar: ' + e.message);
   }
 
-  // Siapkan driver keyboard sekali saat pertama kali .exe dibuka.
-  // Fungsi ini menampilkan dialog + UAC bila perlu, dan menghentikan startup
-  // sementara proses install/restart berlangsung.
+  // Startup normal langsung berjalan tanpa dialog/UAC. Fungsi ini hanya aktif
+  // saat instalasi driver diminta manual lewat menu tray.
   try {
     if (await ensureKeyboardDriverSetup()) return;
   } catch (e) {
