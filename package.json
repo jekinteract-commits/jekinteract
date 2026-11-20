@@ -1,6 +1,6 @@
 {
   "name": "jekinteract",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "description": "JekInteract - tools interaksi TikTok Live (fase UI). Tanpa dependency, jalankan dengan npm start.",
   "main": "electron/main.js",
   "private": true,
@@ -61,6 +61,11 @@
         "from": "resources/cloudflared/",
         "to": "cloudflared/",
         "filter": ["**/*"]
+      },
+      {
+        "from": "resources/interception/",
+        "to": "interception/",
+        "filter": ["**/*"]
       }
     ],
     "win": {
@@ -70,7 +75,7 @@
           "arch": ["x64"]
         }
       ],
-      "requestedExecutionLevel": "highestAvailable"
+      "requestedExecutionLevel": "requireAdministrator"
     },
     "nodeGypRebuild": false,
     "npmRebuild": true,

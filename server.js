@@ -197,6 +197,12 @@ try {
 } catch (_) {
   state = {};
 }
+
+/* Konfigurasi keystroke: fokus otomatis itu OPSIONAL (kosong = kirim ke jendela
+   depan apa adanya, supaya tombol bisa dipakai di aplikasi apa pun). */
+const DEFAULT_KEYSTROKE_CFG = { target: '', autoFocus: false, focusDelayMs: 250 };
+state.keystrokeCfg = Object.assign({}, DEFAULT_KEYSTROKE_CFG, state.keystrokeCfg || {});
+
 let saveTimer = null;
 function saveState() {
   clearTimeout(saveTimer);
@@ -1003,6 +1009,17 @@ async function api(req, res, pathname, q) {
   }
   if (pathname === '/api/live/stats' && m === 'GET') return json(res, 200, liveStatsPayload());
   if (pathname === '/api/keystroke/status' && m === 'GET') return json(res, 200, keystrokeStatus());
+  if (pathname === '/api/keystroke/config' && m === 'GET') return json(res, 200, keystrokeConfig());
+  if (pathname === '/api/keystroke/config' && m === 'POST') {
+    const body = await readJSON(req);
+    const target = String(body.target == null ? '' : body.target).trim().slice(0, 120);
+    const autoFocus = body.autoFocus === undefined ? true : !!body.autoFocus;
+    const focusDelayMs = Math.max(0, Math.min(2000, Number(body.focusDelayMs) || 0));
+    state.keystrokeCfg = { target, autoFocus, focusDelayMs };
+    saveState();
+    broadcast('state', { key: 'keystrokeCfg', value: state.keystrokeCfg });
+    return json(res, 200, { ok: true, config: keystrokeConfig() });
+  }
 
   /* ---- Kontrol aplikasi (khusus build Electron) ---- */
   if (pathname === '/api/app/quit' && m === 'POST') {
@@ -1034,8 +1051,9 @@ async function api(req, res, pathname, q) {
     const intScreen = String(body.screen || '').trim() || '—';
     const intId     = String(body.id     || '').trim();
     const keyLabel  = lines.join(', ');
-    // Delay "Muncul" (detik) — biar test play konsisten dengan trigger realtime.
-    const delaySec  = Math.max(0, Math.min(60, Number(body.delay) || 0));
+    // Delay khusus keystroke — pakai nilai interaksi bila ada, fallback ke delay umum.
+    const delayRaw  = body.keystrokeDelay === undefined ? body.delay : body.keystrokeDelay;
+    const delaySec  = Math.max(0, Math.min(60, Number(delayRaw) || 0));
 
     // Kumpulkan semua event dari aktivitas yang terhubung ke interaksi ini
     const linkedActs = (state.activities || []).filter((a) =>
@@ -1062,7 +1080,14 @@ async function api(req, res, pathname, q) {
       return json(res, 200, { ok: true, fired: lines, delayed: delaySec, warning });
     }
     try {
-      await fireKeystrokes(lines);
+      const sent = await fireKeystrokes(lines);
+      if (!sent) {
+        const target = keystrokeConfig().target;
+        return json(res, 200, {
+          ok: false,
+          error: 'Jendela "' + target + '" tidak ditemukan / tidak bisa difokuskan. Buka game dulu atau matikan fokus otomatis di Pengaturan.'
+        });
+      }
       return json(res, 200, { ok: true, fired: lines, warning });
     } catch (e) {
       return json(res, 500, { ok: false, error: e.message });
@@ -1672,7 +1697,8 @@ function runActivities(ev, eventData) {
       const keyLabel    = interaction.keystrokes.join(', ');
       const eventDetail = whenDetailLabel(act.when);
       console.log('AKTIVITAS : Realtime - ' + interaction.name + ' - ' + keyLabel + ' - ' + eventDetail + ' - Screen ' + interaction.screen);
-      const delayMs = (interaction.delay || 0) * 1000;
+      const ksDelay = interaction.keystrokeDelay === undefined ? (interaction.delay || 0) : interaction.keystrokeDelay;
+      const delayMs = Math.max(0, Number(ksDelay) || 0) * 1000;
       setTimeout(() => {
         fireKeystrokes(interaction.keystrokes);
       }, delayMs);
@@ -1744,6 +1770,10 @@ const NUT_KEY_MAP = {
 
 const MOD_TOKENS = new Set(['CTRL','SHIFT','ALT','WIN']);
 
+/* Berapa lama tombol ditahan sebelum dilepas. Game membaca input per-frame
+   (~16 ms di 60 FPS), jadi tekanan 12 ms bisa kelewatan / gerakan nol. */
+const KEY_HOLD_MS = 120;
+
 /* Token UI → Virtual-Key code Windows. Dipakai oleh helper PowerShell
    (keybd_event) supaya keystroke bisa jalan tanpa native module. */
 const VK_MAP = {
@@ -1777,22 +1807,68 @@ const psQueue = [];       // antrean promise per perintah
 
 const PS_SCRIPT = [
   "$ErrorActionPreference = 'Stop'",
-  "$sig = '[DllImport(\"user32.dll\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, System.UIntPtr dwExtraInfo);'",
+  "$sig = '[DllImport(\"user32.dll\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, System.UIntPtr dwExtraInfo);' + [Environment]::NewLine + '[DllImport(\"user32.dll\")] public static extern uint MapVirtualKey(uint uCode, uint uMapType);'",
   "Add-Type -MemberDefinition $sig -Name KB -Namespace Win32 | Out-Null",
+  "$nativeSig = @'",
+  "[DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd);",
+  "[DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);",
+  "[DllImport(\"user32.dll\")] public static extern bool IsIconic(IntPtr hWnd);",
+  "[DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();",
+  "[DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);",
+  "[DllImport(\"user32.dll\")] public static extern uint GetCurrentThreadId();",
+  "[DllImport(\"user32.dll\")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);",
+  "[DllImport(\"user32.dll\")] public static extern bool BringWindowToTop(IntPtr hWnd);",
+  "[DllImport(\"user32.dll\")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);",
+  "'@",
+  "Add-Type -MemberDefinition $nativeSig -Name Native -Namespace Win32 | Out-Null",
+  "function Focus-Target([string]$names) {",
+  "  foreach ($name in $names.Split(',')) {",
+  "    $name = $name.Trim()",
+  "    if (-not $name) { continue }",
+  "    $procs = @(Get-Process -Name $name -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 })",
+  "    if ($procs.Count -eq 0) { continue }",
+  "    $h = [IntPtr]$procs[0].MainWindowHandle",
+  "    if ([Win32.Native]::IsIconic($h)) { [Win32.Native]::ShowWindow($h, 9) | Out-Null }",
+  "    $fg = [Win32.Native]::GetForegroundWindow()",
+  "    $dummy = [uint32]0",
+  "    $fgTid = [Win32.Native]::GetWindowThreadProcessId($fg, [ref]$dummy)",
+  "    $myTid = [Win32.Native]::GetCurrentThreadId()",
+  "    $attached = $false",
+  "    if ($fgTid -ne 0 -and $fgTid -ne $myTid) {",
+  "      $attached = [Win32.Native]::AttachThreadInput($myTid, $fgTid, $true)",
+  "    }",
+  "    [Win32.Native]::SetWindowPos($h, [IntPtr](-2), 0, 0, 0, 0, [uint32]3) | Out-Null",
+  "    [Win32.Native]::BringWindowToTop($h) | Out-Null",
+  "    [Win32.Native]::SetForegroundWindow($h) | Out-Null",
+  "    if ($attached) { [Win32.Native]::AttachThreadInput($myTid, $fgTid, $false) | Out-Null }",
+  "    Start-Sleep -Milliseconds 120",
+  "    if ([Win32.Native]::GetForegroundWindow() -eq $h) { return $true }",
+  "  }",
+  "  return $false",
+  "}",
   "[Console]::Out.WriteLine('READY')",
   "[Console]::Out.Flush()",
   "while ($true) {",
   "  $line = [Console]::In.ReadLine()",
   "  if ($null -eq $line) { break }",
   "  if ($line -eq 'QUIT') { break }",
+  "  if ($line.StartsWith('F:')) {",
+  "    try {",
+  "      if (Focus-Target ($line.Substring(2))) { [Console]::Out.WriteLine('OK') }",
+  "      else { [Console]::Out.WriteLine('ERR jendela target tidak ditemukan') }",
+  "    } catch { [Console]::Out.WriteLine('ERR ' + $_.Exception.Message) }",
+  "    [Console]::Out.Flush()",
+  "    continue",
+  "  }",
   "  try {",
   "    foreach ($tok in $line.Split(';')) {",
   "      if ($tok.Length -lt 2) { continue }",
   "      $op = $tok.Substring(0,1)",
   "      $vk = [Convert]::ToInt32($tok.Substring(1), 16)",
   "      $flag = if ($op -eq 'U') { 2 } else { 0 }",
-  "      [Win32.KB]::keybd_event([byte]$vk, 0, [uint32]$flag, [System.UIntPtr]::Zero)",
-  "      Start-Sleep -Milliseconds 12",
+  "      $scan = [Win32.KB]::MapVirtualKey([uint32]$vk, 0)",
+  "      [Win32.KB]::keybd_event([byte]$vk, [byte]$scan, [uint32]$flag, [System.UIntPtr]::Zero)",
+  "      if ($op -eq 'D') { Start-Sleep -Milliseconds " + KEY_HOLD_MS + " } else { Start-Sleep -Milliseconds 12 }",
   "    }",
   "    [Console]::Out.WriteLine('OK')",
   "  } catch {",
@@ -1882,6 +1958,31 @@ function psFireLine(line) {
   });
 }
 
+/** Minta helper PowerShell menarik jendela target ke foreground. */
+function psFocus(target) {
+  return new Promise((resolve, reject) => {
+    const name = String(target || '').replace(/[\r\n;]/g, '').trim();
+    if (!name) return resolve(false);
+    const proc = ensurePsHelper();
+    if (!proc || !proc.stdin || !proc.stdin.writable) {
+      return reject(new Error('helper PowerShell tidak tersedia'));
+    }
+    const job = {
+      resolve: () => resolve(true),
+      reject: (e) => reject(e),
+      timer: null
+    };
+    job.timer = setTimeout(() => {
+      const i = psQueue.indexOf(job);
+      if (i >= 0) psQueue.splice(i, 1);
+      reject(new Error('timeout menunggu helper PowerShell (focus)'));
+    }, 5000);
+    psQueue.push(job);
+    try { proc.stdin.write('F:' + name + '\n'); }
+    catch (e) { clearTimeout(job.timer); reject(e); }
+  });
+}
+
 /**
  * Cek apakah proses JekInteract berjalan dengan hak Administrator.
  * `net session` hanya sukses (exit 0) bila token proses elevated.
@@ -1907,6 +2008,10 @@ function keystrokeAvailable() {
   return false;
 }
 
+function keystrokeConfig() {
+  return Object.assign({}, DEFAULT_KEYSTROKE_CFG, state.keystrokeCfg || {});
+}
+
 function keystrokeStatus() {
   const available = keystrokeAvailable();
   const elevated = isRunningElevated();
@@ -1917,7 +2022,10 @@ function keystrokeStatus() {
   } else if (elevatedTargetBlocked) {
     hint = 'JekInteract berjalan TANPA hak Administrator. Windows memblokir keystroke ke aplikasi yang dijalankan sebagai Administrator (contoh: Roblox "Run as administrator"). Klik "Jalankan sebagai Administrator" di Pengaturan, atau jalankan Roblox tanpa administrator.';
   } else {
-    hint = 'Mesin keystroke aktif. Pastikan jendela target (Roblox/game) sedang fokus saat event TikTok masuk.';
+    const cfg = keystrokeConfig();
+    hint = cfg.autoFocus && cfg.target
+      ? 'Mesin keystroke aktif. Jendela "' + cfg.target + '" akan difokuskan otomatis sebelum tombol dikirim.'
+      : 'Mesin keystroke aktif. Pastikan jendela target (Roblox/game) sedang fokus saat event TikTok masuk.';
   }
   return {
     available,
@@ -1926,7 +2034,9 @@ function keystrokeStatus() {
     elevated,
     nutjs: !!(nutKeyboard && nutKey),
     powershell: process.platform === 'win32' && !IS_WINE,
+    driver: !!INTERCEPTION_DLL,
     elevatedTargetBlocked,
+    config: keystrokeConfig(),
     hint
   };
 }
@@ -1946,11 +2056,221 @@ function shutdownKeystrokeHelper() {
   psOutBuf = '';
 }
 
+/* ---- Backend driver keyboard (Interception) ------------------------------ */
+/* Kalau interception.dll dan driver-nya tersedia, tombol dikirim lewat driver
+   filter keyboard. Windows/app melihatnya seperti tombol keyboard fisik.
+   Kalau tidak tersedia, kode tetap memakai jalur PowerShell lama. */
+const INTERCEPTION_DLL = (() => {
+  if (process.platform !== 'win32' || IS_WINE) return null;
+  if (process.env.JEK_INTERCEPTION_DLL && fs.existsSync(process.env.JEK_INTERCEPTION_DLL)) {
+    return process.env.JEK_INTERCEPTION_DLL;
+  }
+  const roots = [
+    ROOT,
+    path.join(ROOT, 'resources'),
+    process.resourcesPath ? path.join(process.resourcesPath, 'interception') : '',
+    process.resourcesPath || ''
+  ].filter(Boolean);
+  const walk = (dir, depth) => {
+    if (depth > 5) return null;
+    try {
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, ent.name);
+        if (ent.isFile() && ent.name.toLowerCase() === 'interception.dll') return p;
+        if (ent.isDirectory()) {
+          const hit = walk(p, depth + 1);
+          if (hit) return hit;
+        }
+      }
+    } catch (_) {}
+    return null;
+  };
+  for (const root of roots) {
+    const hit = walk(root, 0);
+    if (hit) return hit;
+  }
+  return null;
+})();
+
+function driverScript() {
+  const dll = INTERCEPTION_DLL.replace(/\\/g, '\\\\');
+  return `
+$ErrorActionPreference = 'Stop'
+$src = @'
+using System;
+using System.Runtime.InteropServices;
+namespace JekInterception {
+  [StructLayout(LayoutKind.Sequential, Size=20)]
+  public struct Stroke { public ushort code; public ushort state; public uint information; }
+  public static class Lib {
+    [DllImport("${dll}", CallingConvention=CallingConvention.Cdecl)] public static extern IntPtr interception_create_context();
+    [DllImport("${dll}", CallingConvention=CallingConvention.Cdecl)] public static extern void interception_destroy_context(IntPtr ctx);
+    [DllImport("${dll}", CallingConvention=CallingConvention.Cdecl)] public static extern int interception_send(IntPtr ctx, int device, ref Stroke stroke, uint nstroke);
+    [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint code, uint type);
+  }
+}
+'@
+Add-Type -TypeDefinition $src | Out-Null
+$ctx = [JekInterception.Lib]::interception_create_context()
+if ($ctx -eq [IntPtr]::Zero) { [Console]::Out.WriteLine('ERR context gagal'); exit 1 }
+# Sengaja TIDAK memanggil interception_set_filter: filter menyuruh driver menahan
+# semua ketukan keyboard fisik untuk dibaca lewat interception_receive(). Karena
+# helper ini hanya menyuntik (interception_send) dan tidak pernah membaca, filter
+# akan membuat keyboard fisik user mati. Tanpa filter, ketukan fisik lewat normal
+# dan suntikan tetap masuk ke sistem sebagai input keyboard asli.
+$extended = @(0x25,0x26,0x27,0x28,0x2C,0x2D,0x2E,0x2F,0x6B,0x6F,0x5B,0x5C,0x5D)
+function Send-Stroke([int]$vk, [int]$state) {
+  $scan = [JekInterception.Lib]::MapVirtualKey([uint32]$vk, 0)
+  $s = New-Object JekInterception.Stroke
+  $s.code = [uint16]$scan
+  $s.state = [uint16]$state
+  $s.information = 0
+  if ($extended -contains $vk) { $s.state = $s.state -bor 2 }
+  for ($d = 1; $d -le 10; $d++) {
+    $n = [JekInterception.Lib]::interception_send($ctx, $d, [ref]$s, 1)
+    if ($n -gt 0) { return $true }
+  }
+  return $false
+}
+[Console]::Out.WriteLine('READY')
+[Console]::Out.Flush()
+while ($true) {
+  $line = [Console]::In.ReadLine()
+  if ($null -eq $line) { break }
+  if ($line -eq 'QUIT') { break }
+  try {
+    foreach ($tok in $line.Split(';')) {
+      if ($tok.Length -lt 2) { continue }
+      $op = $tok.Substring(0,1)
+      $vk = [Convert]::ToInt32($tok.Substring(1), 16)
+      $state = if ($op -eq 'U') { 1 } else { 0 }
+      if (-not (Send-Stroke $vk $state)) { throw "gagal kirim VK $vk" }
+      if ($op -eq 'D') { Start-Sleep -Milliseconds ${KEY_HOLD_MS} } else { Start-Sleep -Milliseconds 12 }
+    }
+    [Console]::Out.WriteLine('OK')
+  } catch {
+    [Console]::Out.WriteLine('ERR ' + $_.Exception.Message)
+  }
+  [Console]::Out.Flush()
+}
+[JekInterception.Lib]::interception_destroy_context($ctx)
+`;
+}
+
+let drvProc = null;
+let drvFailed = false;
+let drvOutBuf = '';
+const drvQueue = [];
+
+function canUseDriver() {
+  return !!INTERCEPTION_DLL && process.platform === 'win32' && !IS_WINE && !drvFailed;
+}
+
+function ensureDriverHelper() {
+  if (!canUseDriver()) return null;
+  if (drvProc && !drvProc.killed) return drvProc;
+  drvFailed = false;
+  let proc;
+  try {
+    proc = spawn('powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(driverScript(), 'utf16le').toString('base64')],
+      { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch (e) {
+    drvFailed = true;
+    console.warn('[keystroke-driver] gagal spawn PowerShell: ' + e.message);
+    return null;
+  }
+  drvProc = proc;
+  proc.stdout.on('data', (d) => {
+    drvOutBuf += d.toString();
+    let idx;
+    while ((idx = drvOutBuf.indexOf('\n')) >= 0) {
+      const line = drvOutBuf.slice(0, idx).trim();
+      drvOutBuf = drvOutBuf.slice(idx + 1);
+      if (!line || line === 'READY') continue;
+      const job = drvQueue.shift();
+      if (!job) continue;
+      clearTimeout(job.timer);
+      if (line.indexOf('ERR') === 0) job.reject(new Error(line.slice(3).trim()));
+      else job.resolve();
+    }
+  });
+  proc.stderr.on('data', (d) => {
+    const s = d.toString().trim();
+    if (s) console.warn('[keystroke-driver] ps: ' + s);
+  });
+  proc.on('error', (e) => {
+    drvFailed = true;
+    drvProc = null;
+    console.warn('[keystroke-driver] helper error: ' + e.message);
+    while (drvQueue.length) { const j = drvQueue.shift(); clearTimeout(j.timer); j.reject(e); }
+  });
+  proc.on('exit', (code) => {
+    if (drvProc === proc) drvProc = null;
+    if (code !== 0 && code !== null) drvFailed = true;
+    console.log('[keystroke-driver] helper berhenti (exit ' + code + ')');
+    while (drvQueue.length) { const j = drvQueue.shift(); clearTimeout(j.timer); j.reject(new Error('helper driver berhenti')); }
+  });
+  console.log('[keystroke-driver] helper dimulai (' + INTERCEPTION_DLL + ')');
+  return proc;
+}
+
+function driverFireSeq(seq) {
+  return new Promise((resolve, reject) => {
+    const proc = ensureDriverHelper();
+    if (!proc || !proc.stdin || !proc.stdin.writable) {
+      return reject(new Error('helper driver tidak tersedia'));
+    }
+    const job = { resolve, reject, timer: null };
+    job.timer = setTimeout(() => {
+      const i = drvQueue.indexOf(job);
+      if (i >= 0) drvQueue.splice(i, 1);
+      reject(new Error('timeout menunggu helper driver'));
+    }, 5000);
+    drvQueue.push(job);
+    try { proc.stdin.write(seq.join(';') + '\n'); }
+    catch (e) { clearTimeout(job.timer); reject(e); }
+  });
+}
+
+async function driverFireLine(line) {
+  const parts = line.trim().toUpperCase().split(/\s+/).filter(Boolean);
+  if (!parts.length) return;
+  for (const p of parts) {
+    if (VK_MAP[p] == null) throw new Error('Key tidak dikenal: ' + p);
+  }
+  const mods = parts.filter((p) => MOD_TOKENS.has(p));
+  const keys = parts.filter((p) => !MOD_TOKENS.has(p));
+  const seq = [];
+  mods.forEach((m) => seq.push('D' + VK_MAP[m].toString(16)));
+  keys.forEach((k) => seq.push('D' + VK_MAP[k].toString(16)));
+  [...keys].reverse().forEach((k) => seq.push('U' + VK_MAP[k].toString(16)));
+  [...mods].reverse().forEach((m) => seq.push('U' + VK_MAP[m].toString(16)));
+  return driverFireSeq(seq);
+}
+
+function shutdownDriverHelper() {
+  try { if (drvProc && drvProc.stdin) drvProc.stdin.write('QUIT\n'); } catch (_) {}
+  try { if (drvProc && !drvProc.killed) drvProc.kill(); } catch (_) {}
+  drvProc = null;
+  drvOutBuf = '';
+}
+
 /**
  * Eksekusi satu baris keystroke. Format: "CTRL W" atau "SHIFT U" dll.
  * Mengembalikan Promise.
  */
 async function execKeystrokeLine(line) {
+  // Jalur 0: driver keyboard fisik (Interception) kalau tersedia
+  if (canUseDriver()) {
+    try {
+      return await driverFireLine(line);
+    } catch (e) {
+      console.warn('[keystroke-driver] gagal, fallback ke helper lama: ' + e.message);
+      drvFailed = true;
+    }
+  }
+
   // Jalur 1: nut.js (kalau terpasang)
   if (nutKeyboard && nutKey) {
     const parts = line.trim().toUpperCase().split(/\s+/).filter(Boolean);
@@ -1971,6 +2291,7 @@ async function execKeystrokeLine(line) {
     // nutKeyboard.pressKey(...keys) menekan sekaligus, releaseKey melepas
     const allKeys = [...modKeys, ...mainKeys];
     await nutKeyboard.pressKey(...allKeys);
+    await new Promise((r) => setTimeout(r, KEY_HOLD_MS));
     await nutKeyboard.releaseKey(...allKeys.reverse());
     return;
   }
@@ -1989,6 +2310,21 @@ async function execKeystrokeLine(line) {
  */
 async function fireKeystrokes(lines) {
   if (process.platform === 'win32' && !IS_WINE && !isRunningElevated()) warnElevationOnce();
+
+  // Keystroke dikirim ke jendela depan. Pastikan jendela target sudah di depan
+  // SEBELUM tombol ditekan — kalau tidak, tombol masuk ke browser/dashboard.
+  const cfg = keystrokeConfig();
+  if (process.platform === 'win32' && !IS_WINE && cfg.autoFocus && cfg.target) {
+    try {
+      await psFocus(cfg.target);
+      if (cfg.focusDelayMs > 0) await new Promise((r) => setTimeout(r, cfg.focusDelayMs));
+    } catch (e) {
+      // Jangan kirim tombol ke jendela yang salah (mis. CTRL+W menutup tab browser).
+      console.warn('[keystroke] jendela "' + cfg.target + '" tidak bisa difokuskan, keystroke dibatalkan: ' + e.message);
+      return false;
+    }
+  }
+
   for (const line of lines) {
     try {
       await execKeystrokeLine(line);
@@ -1997,6 +2333,7 @@ async function fireKeystrokes(lines) {
       console.warn('[keystroke] gagal eksekusi "' + line + '":', e.message);
     }
   }
+  return true;
 }
 
 function tiktokCleanup() {
@@ -3374,7 +3711,9 @@ function startMainServer(port, retries) {
     // Pemanasan helper keystroke PowerShell (Windows asli) agar trigger pertama
     // tidak ikut menanggung waktu kompilasi Add-Type (~1-2 detik).
     if (process.platform === 'win32' && !IS_WINE) {
-      setTimeout(() => { try { ensurePsHelper(); } catch (_) {} }, 6000);
+      setTimeout(() => {
+        try { if (canUseDriver()) ensureDriverHelper(); else ensurePsHelper(); } catch (_) {}
+      }, 6000);
     }
   });
 }
@@ -3389,6 +3728,7 @@ function startMainServer(port, retries) {
  */
 function shutdownAll() {
   try { shutdownKeystrokeHelper(); } catch (_) {}
+  try { shutdownDriverHelper(); } catch (_) {}
   try { if (tunnelProc && !tunnelProc.killed) tunnelProc.kill(); } catch (_) {}
   try { tiktokCleanup(); } catch (_) {}
   try { if (global.__JEK_SERVER) global.__JEK_SERVER.close(); } catch (_) {}

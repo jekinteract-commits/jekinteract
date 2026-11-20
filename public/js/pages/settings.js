@@ -120,6 +120,11 @@ export default {
       '<section class="panel">' +
       '<div class="fh"><div class="fh-t"><h2>Keluar & Hak Administrator</h2><div class="sub">Tutup semua proses JekInteract (termasuk helper keyboard & tunnel) agar file .exe bisa dihapus/diganti.</div></div></div>' +
       '<div id="st-ks-status"><span class="muted">Mendeteksi mesin keystroke…</span></div>' +
+      '<div class="fgrp"><label class="lbl" for="st-ks-target">Jendela target keystroke</label>' +
+      '<div class="field"><input id="st-ks-target" type="text" autocomplete="off" spellcheck="false" maxlength="120" placeholder="RobloxPlayerBeta"></div>' +
+      '<p class="hint"><b>Opsional.</b> Nama proses aplikasi yang akan difokuskan <b>sebelum</b> tombol dikirim. Bisa beberapa proses dipisah koma, misal <b>RobloxPlayerBeta,RobloxPlayer</b>. Kosongkan supaya tombol dikirim ke aplikasi apa pun yang sedang fokus.</p></div>' +
+      '<label class="chk"><input type="checkbox" id="st-ks-autofocus"><i></i><span class="t"><b>Fokus otomatis sebelum kirim keystroke</b><span>Centang hanya kalau ingin JekInteract menarik jendela target ke depan otomatis.</span></span></label>' +
+      '<div class="row"><button type="button" class="btn sm" id="st-ks-save">' + icon('save') + 'Simpan Target Keystroke</button></div>' +
       '<p class="hint">Jika Roblox dijalankan dengan <b>Run as administrator</b>, JekInteract juga harus elevated. Windows memblokir keystroke dari proses biasa ke proses Administrator. Shortcut keluar global: <b>Ctrl+Alt+Shift+Q</b>.</p>' +
       '<div class="row"><button type="button" class="btn" id="st-admin">' + icon('bolt') + 'Jalankan sebagai Administrator</button>' +
       '<button type="button" class="btn danger" id="st-quit">' + icon('power') + 'Keluar JekInteract</button></div>' +
@@ -334,6 +339,34 @@ export default {
     }).catch(() => {
       const box = $('#st-ks-status', root);
       if (box) box.innerHTML = '<span class="muted sm-t">Status keystroke gagal dideteksi.</span>';
+    });
+
+    /* ---- target jendela keystroke ---- */
+    API.keystrokeConfig().then((cfg) => {
+      const target = $('#st-ks-target', root);
+      const auto = $('#st-ks-autofocus', root);
+      if (target) target.value = cfg.target || '';
+      if (auto) auto.checked = !!cfg.autoFocus;
+    }).catch(() => {});
+
+    $('#st-ks-save', root).addEventListener('click', async () => {
+      const cfg = {
+        target: $('#st-ks-target', root).value.trim(),
+        autoFocus: $('#st-ks-autofocus', root).checked,
+        focusDelayMs: 250
+      };
+      try {
+        await API.saveKeystrokeConfig(cfg);
+        toast('Target keystroke disimpan. Tombol akan dikirim ke jendela tersebut.', 'ok');
+        const s = await API.keystrokeStatus();
+        const box = $('#st-ks-status', root);
+        if (box && s.available && !s.elevatedTargetBlocked) {
+          box.innerHTML = '<span class="st on"><i></i>Keystroke aktif' + (s.elevated ? ' (Administrator)' : '') + '</span>' +
+            '<p class="hint">' + esc(s.hint) + '</p>';
+        }
+      } catch (e) {
+        toast('Gagal menyimpan target keystroke: ' + e.message, 'err');
+      }
     });
 
     $('#st-admin', root).addEventListener('click', async () => {

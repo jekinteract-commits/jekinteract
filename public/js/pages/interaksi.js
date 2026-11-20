@@ -45,6 +45,7 @@ const blankInteraction = () => ({
   volume: 100,
   duration: 10,
   delay: 0,
+  keystrokeDelay: 0,
   screen: 1,
   repeatCombo: false,
   fade: false
@@ -353,7 +354,14 @@ async function testPlay(it) {
       const kr = await fetch('/api/keystroke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lines: it.keystrokes, name: it.name, screen: it.screen, id: it.id, delay: it.delay || 0 })
+        body: JSON.stringify({
+          lines: it.keystrokes,
+          name: it.name,
+          screen: it.screen,
+          id: it.id,
+          delay: it.delay || 0,
+          keystrokeDelay: it.keystrokeDelay === undefined ? (it.delay || 0) : it.keystrokeDelay
+        })
       });
       const kd = await kr.json();
       if (kd.simulated) {
@@ -460,7 +468,8 @@ function keystrokeHintHTML() {
     return '<p class="hint" id="if-ks-hint" style="color:#fbbf24">⚠ ' + esc(ksStatus.hint) +
       ' <button type="button" class="btn sm" data-ks-admin>' + icon('bolt') + 'Jalankan sebagai Administrator</button></p>';
   }
-  return '<p class="hint" id="if-ks-hint" style="color:#86efac">✓ ' + esc(ksStatus.hint) + '</p>';
+  return '<p class="hint" id="if-ks-hint" style="color:#86efac">✓ ' + esc(ksStatus.hint) +
+    (ksStatus.config && ksStatus.config.autoFocus ? ' <span class="small-dim">Target bisa diubah di Pengaturan.</span>' : '') + '</p>';
 }
 
 function triggerBlockHTML(t, d) {
@@ -540,6 +549,10 @@ function openInteractionForm(existing, onSave) {
     '<div class="fgrp" data-f="delay"><label class="lbl" for="if-delay">Delay Muncul</label>' +
     '<p class="hint">Interaksi akan ditunda beberapa detik sebelum ditampilkan di screen.</p>' +
     '<div class="field short"><input id="if-delay" type="number" inputmode="numeric" min="0" max="60" step="0.5" value="' + (data.delay || 0) + '"><span class="unit">Detik</span></div></div>' +
+
+    '<div class="fgrp" data-f="ksdelay"><label class="lbl" for="if-ksdelay">Delay Keystroke</label>' +
+    '<p class="hint">Jeda khusus sebelum tombol ditekan. Gunakan ini kalau perlu pindah ke jendela game setelah menekan Play.</p>' +
+    '<div class="field short"><input id="if-ksdelay" type="number" inputmode="numeric" min="0" max="60" step="0.5" value="' + (data.keystrokeDelay === undefined ? (data.delay || 0) : data.keystrokeDelay) + '"><span class="unit">Detik</span></div></div>' +
 
     '<div class="fgrp"><label class="lbl" for="if-screen">Pilih Screen</label>' +
     '<p class="hint">Pilih di screen mana interaksi ini akan dijalankan?</p>' +
@@ -686,6 +699,7 @@ function openInteractionForm(existing, onSave) {
     data.volume = Number(m.$('#if-vol').value);
     data.duration = Math.round(Number(m.$('#if-dur').value));
     data.delay = Math.round(Number(m.$('#if-delay').value) * 10) / 10;
+    data.keystrokeDelay = Math.round(Number(m.$('#if-ksdelay').value) * 10) / 10;
     data.screen = Number(m.$('#if-screen').value);
     data.repeatCombo = m.$('#if-rep').checked;
     data.fade = m.$('#if-fade').checked;
@@ -705,6 +719,7 @@ function openInteractionForm(existing, onSave) {
     if (t.keystroke && !data.keystrokes.length) return showError('Trigger Keystroke aktif, tapi belum ada keystroke.', '[data-t="keystroke"]');
     if (!(data.duration >= 1 && data.duration <= 600)) return showError('Durasi tampil harus 1 sampai 600 detik.', '[data-f="duration"] .field');
     if (!(data.delay >= 0 && data.delay <= 60)) return showError('Delay muncul harus 0 sampai 60 detik.', '[data-f="delay"] .field');
+    if (!(data.keystrokeDelay >= 0 && data.keystrokeDelay <= 60)) return showError('Delay keystroke harus 0 sampai 60 detik.', '[data-f="ksdelay"] .field');
 
     offs.forEach((f) => f());
     onSave(data);

@@ -127,11 +127,49 @@ Solusi (pilih salah satu):
 
 Catatan tambahan:
 
-- Pastikan **jendela Roblox sedang fokus** saat event TikTok masuk. Keystroke
-  dikirim ke jendela depan (foreground).
+- Keystroke dikirim ke **jendela depan (foreground)**, bukan ke aplikasi tertentu.
+  Kalau menekan **Play** lalu baru pindah ke game, tombol sudah keburu masuk ke
+  browser. Isi **Delay Keystroke** di form Interaksi (mis. 3 detik) supaya sempat
+  pindah ke aplikasi tujuan sebelum tombol ditekan.
+- Tombol dikirim memakai *scan code* asli (`MapVirtualKey` + `keybd_event`),
+  bukan cuma virtual-key. Ini penting supaya game yang membaca input mentah
+  (bukan cuma kolom teks/chat) ikut merespons.
+- Opsional: buka **Pengaturan → Keluar & Hak Administrator**, isi **Jendela
+  target keystroke** (mis. `RobloxPlayerBeta,RobloxPlayer`) lalu centang **Fokus
+  otomatis sebelum kirim keystroke** kalau ingin jendela game ditarik ke depan
+  otomatis. Kosongkan kalau mau keystroke jalan di aplikasi apa pun yang sedang
+  fokus.
 - Cek **Pengaturan → Keluar & Hak Administrator** atau form Interaksi → Trigger
   Keystroke untuk melihat status mesin keystroke secara real-time.
 - Shortcut global untuk keluar: **Ctrl+Alt+Shift+Q**.
+
+## Keystroke setara keyboard fisik (jalur driver)
+
+Secara default keystroke dikirim lewat helper PowerShell (`keybd_event`). Windows
+menandai input ini sebagai *injected*, jadi sebagian aplikasi/game bisa mengabaikannya.
+
+Kalau `interception.dll` tersedia, JekInteract otomatis memakai **driver keyboard
+Interception** — tombol dikirim lewat driver filter sehingga tampak seperti keyboard
+fisik. Jalur lama tetap dipakai kalau driver tidak ada, jadi fitur lain tidak berubah.
+
+**Tidak ada langkah manual.** Saat `.exe` pertama kali dibuka, JekInteract otomatis:
+
+1. Mendeteksi bahwa driver belum terpasang → menampilkan satu dialog persetujuan.
+2. Meminta izin **UAC sekali** (Windows), lalu memasang driver sendiri — tanpa CMD / PowerShell.
+3. Meminta **restart PC sekali** supaya driver aktif.
+
+Setelah restart itu, setiap kali membuka `.exe` langsung berfungsi: tidak ada dialog,
+tidak ada perintah, tidak ada langkah tambahan — persis seperti aplikasi lain.
+
+Catatan:
+- `.exe` meminta izin Administrator (UAC) saat dibuka — itu wajib agar aplikasi bisa
+  memakai driver tingkat keyboard. Cukup klik **Yes**, tidak perlu CMD apa pun.
+- Kalau driver sudah terpasang, setup dilewati otomatis.
+- Kalau install gagal (mis. sebagian Windows 11 menolak driver lama), aplikasi tetap
+  berjalan memakai keystroke mode lama — fitur lain tidak berubah. Pasang ulang bisa
+  lewat menu tray **Pasang ulang driver keyboard…**.
+- Cek log (`jekinteract.log`): harus ada `[keystroke-driver] helper dimulai (...interception.dll)`.
+  Kalau yang muncul `[keystroke] helper PowerShell dimulai`, berarti driver belum aktif.
 
 ## Connection: "Gagal — Library tiktok-live-connector tidak tersedia"
 

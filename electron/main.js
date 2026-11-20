@@ -185,6 +185,198 @@ function restartAsAdmin() {
 global.__JEK_QUIT = shutdownAndQuit;
 global.__JEK_RESTART_ADMIN = restartAsAdmin;
 
+// ── Auto-install driver keyboard (Interception) ───────────────────────────────
+// Supaya keystroke setara keyboard fisik, driver harus terpasang di Windows.
+// Semua langkah (UAC + install) dijalankan otomatis dari .exe — pengguna tidak
+// perlu membuka CMD / PowerShell. Dilakukan sekali; setelah driver ada, tiap
+// kali buka .exe langsung berfungsi seperti biasa.
+const INTERCEPTION_SETUP_ARG = '--interception-setup';
+
+function setupMarkerPath() {
+  try { return path.join(app.getPath('userData'), 'interception-setup.json'); }
+  catch (_) { return path.join(os.tmpdir(), 'jekinteract-interception-setup.json'); }
+}
+function readSetupMarker() {
+  try { return JSON.parse(fs.readFileSync(setupMarkerPath(), 'utf8')); } catch (_) { return {}; }
+}
+function writeSetupMarker(obj) {
+  try {
+    fs.mkdirSync(path.dirname(setupMarkerPath()), { recursive: true });
+    fs.writeFileSync(setupMarkerPath(), JSON.stringify(obj));
+  } catch (_) {}
+}
+
+/** Cek apakah driver Interception sudah terpasang di sistem. */
+function interceptionDriverInstalled() {
+  if (process.platform !== 'win32' || IS_WINE) return false;
+  const windir = process.env.WINDIR || 'C:\\Windows';
+  try {
+    if (fs.existsSync(path.join(windir, 'System32', 'drivers', 'interception.sys'))) return true;
+  } catch (_) {}
+  try {
+    const r = spawnSync('sc', ['query', 'interception'], { windowsHide: true, encoding: 'utf8' });
+    if (r && (r.stdout || '').toLowerCase().indexOf('interception') >= 0) return true;
+  } catch (_) {}
+  return false;
+}
+
+/** Cari install-interception.exe di bundel (.exe) atau folder resources. */
+function findInterceptionInstaller() {
+  const roots = [];
+  if (isPackaged) roots.push(path.join(process.resourcesPath, 'interception'));
+  roots.push(path.join(ROOT, 'resources', 'interception'));
+  roots.push(path.join(ROOT, 'interception'));
+  const walk = (dir, depth) => {
+    if (depth > 5) return null;
+    try {
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, ent.name);
+        if (ent.isFile() && ent.name.toLowerCase() === 'install-interception.exe') return p;
+        if (ent.isDirectory()) {
+          const hit = walk(p, depth + 1);
+          if (hit) return hit;
+        }
+      }
+    } catch (_) {}
+    return null;
+  };
+  for (const root of roots) {
+    const hit = walk(root, 0);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** Jalankan ulang .exe dengan UAC, membawa flag --interception-setup. */
+function relaunchElevatedForSetup() {
+  const args = process.argv.slice(1).filter((a) => {
+    if (a === INTERCEPTION_SETUP_ARG) return false;
+    try { return path.resolve(a) !== path.resolve(process.execPath); } catch (_) { return true; }
+  });
+  args.push(INTERCEPTION_SETUP_ARG);
+  const psCmd =
+    '$p = ' + JSON.stringify(process.execPath) + '; ' +
+    '$a = ' + JSON.stringify(args) + '; ' +
+    'Start-Process -FilePath $p -ArgumentList $a -Verb RunAs';
+  try {
+    // Lepas lock dulu supaya instance elevated bisa langsung jalan.
+    try { app.releaseSingleInstanceLock(); } catch (_) {}
+    execFile('powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psCmd],
+      { windowsHide: true },
+      (err) => {
+        if (err) {
+          log('[setup] gagal meminta elevasi: ' + err.message);
+          dialog.showErrorBox('JekInteract - Siapkan keyboard',
+            'Gagal meminta izin Administrator:\n\n' + err.message +
+            '\n\nKlik kanan JekInteract.exe → Run as administrator, lalu buka lagi.');
+        }
+      });
+    return true;
+  } catch (e) {
+    dialog.showErrorBox('JekInteract - Siapkan keyboard',
+      'Gagal meminta izin Administrator: ' + (e && e.message ? e.message : e));
+    return false;
+  }
+}
+
+/** Instal driver secara diam-diam (dijalankan dari instance elevated). */
+function runInterceptionInstaller() {
+  return new Promise((resolve) => {
+    const installer = findInterceptionInstaller();
+    if (!installer) {
+      return resolve({ ok: false, error: 'File installer driver tidak ditemukan di bundel .exe.' });
+    }
+    const psCmd =
+      '$i = ' + JSON.stringify(installer) + '; ' +
+      'Start-Process -FilePath $i -ArgumentList ' + JSON.stringify('/install') +
+      ' -Verb RunAs -Wait -WindowStyle Hidden';
+    execFile('powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psCmd],
+      { windowsHide: true, cwd: path.dirname(installer) },
+      (err) => {
+        const installed = interceptionDriverInstalled();
+        log('[setup] installer selesai — err=' + (err ? err.message : '-') + ', driverFound=' + installed);
+        resolve({ ok: installed, installed, error: err ? err.message : '' });
+      });
+  });
+}
+
+/**
+ * Pastikan driver keyboard siap sebelum server jalan.
+ * Mengembalikan true bila startup harus dihentikan (sedang restart/elevasi).
+ */
+async function ensureKeyboardDriverSetup() {
+  if (process.platform !== 'win32' || IS_WINE) return false;
+
+  const inSetupMode = process.argv.includes(INTERCEPTION_SETUP_ARG);
+  log('[setup] cek driver — elevated=' + isElevated() + ', modeInstall=' + inSetupMode);
+
+  if (interceptionDriverInstalled()) {
+    log('[setup] driver keyboard sudah terpasang — lewati setup');
+    return false;
+  }
+
+  // Sudah pernah dicoba / dilewati → jangan mengganggu tiap kali dibuka.
+  // Mode install (dari tray "Pasang ulang...") sengaja mengabaikan marker.
+  const marker = readSetupMarker();
+  if (!inSetupMode && (marker.attemptedAt || marker.skippedAt)) {
+    log('[setup] setup sebelumnya sudah dicoba — lewati auto-install');
+    return false;
+  }
+
+  // Minta persetujuan sekali pada peluncuran biasa.
+  if (!inSetupMode) {
+    const choice = dialog.showMessageBoxSync({
+      type: 'info',
+      buttons: ['Pasang sekarang (disarankan)', 'Lewati'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'JekInteract - Siapkan keyboard',
+      message: 'JekInteract perlu menyiapkan driver keyboard sekali ini.',
+      detail: 'Klik "Pasang sekarang" → driver dipasang otomatis (izin Windows / UAC) → PC restart sekali.\nSetelah itu cukup buka .exe; semua fitur langsung berfungsi tanpa CMD.'
+    });
+    if (choice !== 0) {
+      writeSetupMarker({ skippedAt: Date.now() });
+      log('[setup] user melewati setup driver');
+      return false;
+    }
+  }
+
+  // Butuh hak Administrator untuk memasang driver. Kalau belum elevated,
+  // jalankan ulang .exe sekali dengan flag mode install.
+  if (!isElevated()) {
+    relaunchElevatedForSetup();
+    app.quit();
+    return true;
+  }
+
+  // Sudah elevated (manifest .exe memang requireAdministrator) → pasang langsung.
+  const res = await runInterceptionInstaller();
+  writeSetupMarker({ attemptedAt: Date.now(), ok: res.ok });
+
+  if (res.ok) {
+    const choice = dialog.showMessageBoxSync({
+      type: 'info',
+      buttons: ['Restart sekarang', 'Nanti saja'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'JekInteract - Siapkan keyboard',
+      message: 'Driver keyboard berhasil dipasang.',
+      detail: 'PC perlu di-restart sekali supaya driver aktif.\nSetelah itu cukup buka JekInteract.exe — semua fitur langsung berfungsi tanpa CMD / langkah tambahan.'
+    });
+    if (choice === 0) {
+      try { spawnSync('shutdown', ['/r', '/t', '5'], { windowsHide: true, stdio: 'ignore' }); } catch (_) {}
+    }
+  } else {
+    dialog.showErrorBox('JekInteract - Siapkan keyboard',
+      'Driver tidak bisa dipasang otomatis.\n\n' + (res.error || 'Installer gagal.') +
+      '\n\nAplikasi tetap berjalan memakai keystroke mode lama.');
+  }
+  app.quit();
+  return true;
+}
+
 // ── Hotkey global Win/Lose (Numpad + / -) ─────────────────────────────────────
 // Didaftarkan hanya saat halaman Win Lose Bar terbuka, supaya Numpad tidak
 // "dibajak" terus-menerus saat halaman lain yang sedang dipakai.
@@ -518,6 +710,20 @@ function createTray(port) {
         if (!r.ok) dialog.showErrorBox('JekInteract', r.error || 'Tidak bisa restart sebagai Administrator.');
       }
     },
+    {
+      label: 'Pasang ulang driver keyboard…',
+      click: () => {
+        if (interceptionDriverInstalled()) {
+          dialog.showMessageBoxSync({
+            type: 'info', title: 'JekInteract',
+            message: 'Driver keyboard sudah terpasang.',
+            detail: 'Tidak perlu dipasang ulang.'
+          });
+          return;
+        }
+        if (relaunchElevatedForSetup()) app.quit();
+      }
+    },
     { label: 'Keluar (tutup server & helper)', click: shutdownAndQuit }
   ]);
 
@@ -575,6 +781,16 @@ app.whenReady().then(async () => {
     log('[electron] shortcut keluar ' + QUIT_SHORTCUT + ': ' + (ok ? 'aktif' : 'gagal didaftarkan'));
   } catch (e) {
     log('[electron] gagal mendaftarkan shortcut keluar: ' + e.message);
+  }
+
+  // Siapkan driver keyboard sekali saat pertama kali .exe dibuka.
+  // Fungsi ini menampilkan dialog + UAC bila perlu, dan menghentikan startup
+  // sementara proses install/restart berlangsung.
+  try {
+    if (await ensureKeyboardDriverSetup()) return;
+  } catch (e) {
+    log('[setup] gagal menyiapkan driver keyboard: ' + (e && e.stack ? e.stack : e));
+    // Setup gagal tidak boleh menghalangi aplikasi berjalan (fallback keystroke lama).
   }
 
   try {
