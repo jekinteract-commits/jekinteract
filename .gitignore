@@ -7,3 +7,8 @@ dist/
 *.bak*
 server.js.Sebelum*
 public/js/pages/interaksi.js.Sebelum*
+# License / secrets (jangan pernah ikut ke repo atau .exe)
+tools/.env
+.env.local
+license-server/.dev.vars
+license-server/.env

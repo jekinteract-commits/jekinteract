@@ -1,0 +1,10 @@
+name = "jek-license"
+main = "src/index.js"
+compatibility_date = "2026-11-21"
+
+# Ganti database_id dengan hasil perintah:
+#   npx wrangler d1 create jek-license
+[[d1_databases]]
+binding = "DB"
+database_name = "jek-license"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"

@@ -49,6 +49,20 @@ public/          dashboard (index.html) dan overlay (overlay.html)
 data/            dibuat otomatis: state.json dan uploads/
 ```
 
+## Auth Key / Lisensi (opsional)
+
+`.exe` bisa dikunci pakai **Auth Key**: user diminta masukin kode sekali saat aktivasi
+(1 key = 1 PC), berlaku sesuai durasi yang owner tentukan (misal 30 hari), dengan
+grace period 7 hari kalau internet putus. Key di-generate owner dari Termux dan
+disimpan di Cloudflare D1; `.exe` nanya ke server itu tiap kali dibuka.
+
+Panduan lengkap (daftar Cloudflare, deploy Worker, generate key, revoke, unbind device):
+**[LICENSE-SETUP.md](LICENSE-SETUP.md)**
+
+> Sebelum deploy, `electron/license-config.json` sengaja `requireLicense: false`
+> supaya mode development tetap jalan. Set jadi `true` dan isi `licenseUrl`
+> sebelum `npm run build:win`.
+
 Overlay di OBS: Browser Source dengan link dari dashboard. Jika OBS ada di PC lain,
 isi "Alamat dasar link overlay" di Pengaturan dengan IP HP (misal `http://192.168.1.5:3000`).
 

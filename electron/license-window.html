@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JekInteract — Auth Key</title>
+<style>
+  :root{
+    --bg:#070b16; --panel:#0f172a; --panel2:#141e35; --line:#1e2c4a;
+    --cyan:#22d3ee; --cyan2:#0ea5e9; --text:#e2e8f0; --muted:#8294b5;
+    --red:#f87171; --green:#4ade80; --amber:#fbbf24;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    font-family:"Segoe UI",Roboto,Arial,sans-serif; color:var(--text);
+    background:
+      radial-gradient(circle at 15% 10%,rgba(34,211,238,.10),transparent 42%),
+      radial-gradient(circle at 85% 90%,rgba(14,165,233,.10),transparent 45%),
+      var(--bg);
+  }
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; opacity:.16;
+    background-image:linear-gradient(rgba(120,170,255,.08) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(120,170,255,.08) 1px,transparent 1px);
+    background-size:34px 34px;
+  }
+  .card{
+    position:relative; width:min(520px,calc(100vw - 32px));
+    background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--line); border-radius:18px; padding:28px;
+    box-shadow:0 24px 70px rgba(0,0,0,.6),0 0 0 1px rgba(34,211,238,.05) inset;
+  }
+  .brand{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .logo{
+    width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--cyan),var(--cyan2));color:#04121f;
+    font-weight:900;font-size:20px;box-shadow:0 0 22px rgba(34,211,238,.35)
+  }
+  .brand h1{font-size:19px;margin:0;letter-spacing:.5px}
+  .brand small{display:block;color:var(--cyan);font-size:10px;letter-spacing:2.4px;margin-top:3px}
+  .sub{color:var(--muted);font-size:13px;margin:14px 0 18px;line-height:1.6}
+  .badge{
+    display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;
+    font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+    background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.3)
+  }
+  .badge.ok{background:rgba(74,222,128,.12);color:var(--green);border-color:rgba(74,222,128,.3)}
+  .dot{width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
+  .msg{
+    margin:16px 0; padding:13px 14px; border-radius:11px; font-size:13px; line-height:1.55;
+    background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.22);color:#fecaca
+  }
+  .msg.ok{background:rgba(74,222,128,.07);border-color:rgba(74,222,128,.22);color:#bbf7d0}
+  label{display:block;font-size:11px;letter-spacing:1.4px;color:var(--muted);margin:0 0 8px;text-transform:uppercase}
+  .field{
+    display:flex;align-items:center;gap:10px;background:#09111f;border:1px solid var(--line);
+    border-radius:11px;padding:0 14px;transition:.2s
+  }
+  .field:focus-within{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(34,211,238,.12)}
+  .field span{color:var(--cyan);font-size:17px}
+  input{
+    flex:1;background:transparent;border:0;outline:0;color:#fff;
+    font-family:ui-monospace,Consolas,monospace;font-size:17px;letter-spacing:2px;
+    padding:14px 0;text-transform:uppercase
+  }
+  input::placeholder{color:#405372;letter-spacing:1px}
+  .actions{display:flex;gap:9px;margin-top:16px}
+  button{
+    flex:1;border:0;border-radius:10px;padding:12px 10px;font-size:12px;font-weight:800;
+    letter-spacing:1.1px;text-transform:uppercase;cursor:pointer;transition:.18s
+  }
+  .primary{background:linear-gradient(135deg,var(--cyan),var(--cyan2));color:#04121f;box-shadow:0 8px 22px rgba(34,211,238,.22)}
+  .primary:hover{filter:brightness(1.1);transform:translateY(-1px)}
+  .ghost{background:#111c31;color:var(--muted);border:1px solid var(--line);flex:0 0 auto;padding-inline:16px}
+  .ghost:hover{color:#fff;border-color:#34466b}
+  button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+  .meta{
+    margin-top:20px;padding-top:16px;border-top:1px dashed var(--line);
+    display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;font-size:11px;color:var(--muted)
+  }
+  .meta b{display:block;color:#cbd5e1;font-family:ui-monospace,Consolas,monospace;font-size:11px;margin-top:4px;word-break:break-all}
+  .foot{text-align:center;color:#4f627f;font-size:10px;margin-top:18px;letter-spacing:.4px}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(4,18,31,.35);
+        border-top-color:#04121f;border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">
+    <div class="logo">J</div>
+    <div><h1>JekInteract</h1><small>ACCESS CONTROL // AUTH KEY</small></div>
+  </div>
+
+  <p class="sub">Aplikasi ini dilindungi lisensi. Masukkan kode Auth Key yang dikasih owner untuk mengaktifkan perangkat ini.</p>
+
+  <div class="badge" id="badge"><span class="dot"></span><span id="badgeText">Menunggu aktivasi</span></div>
+  <div class="msg" id="msg">Mengecek status lisensi…</div>
+
+  <form id="form" autocomplete="off">
+    <label for="key">Kode Auth Key</label>
+    <div class="field">
+      <span>&#128273;</span>
+      <input id="key" name="key" placeholder="JEKK-XXXX-XXXX-XXXX-XXXX" spellcheck="false" autocomplete="off" maxlength="32">
+    </div>
+    <div class="actions">
+      <button class="primary" type="submit" id="submitBtn">Aktivasi</button>
+      <button class="ghost" type="button" id="retryBtn">Coba lagi</button>
+      <button class="ghost" type="button" id="quitBtn">Keluar</button>
+    </div>
+  </form>
+
+  <div class="meta">
+    <div>DEVICE ID<b id="hwid">-</b></div>
+    <div>BERLAKU SAMPAI<b id="expiry">-</b></div>
+    <div>MASA TENGGANG<b id="grace">7 hari</b></div>
+    <div>STATUS SERVER<b id="mode">-</b></div>
+  </div>
+
+  <div class="foot">1 key = 1 perangkat &nbsp;•&nbsp; Key habis = minta key baru ke owner</div>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var bridge = window.__licenseBridge__ || null;
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  }); }
+
+  function prettyDate(iso){
+    if(!iso) return '-';
+    var d = new Date(iso);
+    if(isNaN(d.getTime())) return '-';
+    return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});
+  }
+
+  function setBusy(busy, text){
+    $('submitBtn').disabled = busy;
+    $('retryBtn').disabled = busy;
+    $('submitBtn').innerHTML = busy ? '<span class="spin"></span>' + esc(text || 'Memproses') : 'Aktivasi';
+  }
+
+  function render(s){
+    if(!s) return;
+    var ok = !!s.ok;
+    $('badge').className = 'badge' + (ok ? ' ok' : '');
+    $('badgeText').textContent = ok ? 'Lisensi aktif' : 'Akses terkunci';
+    $('msg').className = 'msg' + (ok ? ' ok' : '');
+    $('msg').innerHTML = esc(s.message || '-') +
+      (s.mode === 'grace' ? '<br><small>Offline — sisa grace ~' + esc(s.graceLeftDays) + ' hari.</small>' : '');
+    $('hwid').textContent = s.hwid || '-';
+    $('expiry').textContent = prettyDate(s.expiresAt);
+    $('grace').textContent = (s.graceDays || 7) + ' hari';
+    $('mode').textContent = ({
+      online:'Terhubung', grace:'Offline (grace)', offline:'Tidak terhubung',
+      disabled:'Mode dev', '-':'Menunggu'
+    })[s.mode || '-'] || (s.mode || '-');
+    if(s.key) $('key').value = s.key;
+  }
+
+  async function refresh(){
+    if(!bridge){ render({ok:false,message:'Bridge Electron tidak tersedia. Buka lewat file .exe, bukan browser.',hwid:'-',graceDays:7,mode:'-'}); return; }
+    try { render(await bridge.getStatus()); }
+    catch(e){ render({ok:false,message:'Gagal baca status: ' + e.message,hwid:'-',graceDays:7,mode:'-'}); }
+  }
+
+  $('form').addEventListener('submit', async function(e){
+    e.preventDefault();
+    if(!bridge) return;
+    var key = $('key').value.trim();
+    if(!key){ $('msg').textContent = 'Key masih kosong.'; return; }
+    setBusy(true,'Memverifikasi');
+    try {
+      var r = await bridge.submit(key);
+      render(r);
+      if(!r.ok) $('key').select();
+    } catch(err){
+      $('msg').textContent = 'Error: ' + err.message;
+    } finally { setBusy(false); }
+  });
+
+  $('retryBtn').addEventListener('click', async function(){
+    if(!bridge) return;
+    setBusy(true,'Mengecek');
+    try { render(await bridge.retry()); }
+    catch(e){ $('msg').textContent = 'Error: ' + e.message; }
+    finally { setBusy(false); }
+  });
+
+  $('quitBtn').addEventListener('click', function(){ if(bridge) bridge.quit(); });
+  refresh();
+})();
+</script>
+</body>
+</html>

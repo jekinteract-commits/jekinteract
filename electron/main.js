@@ -18,6 +18,7 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const { spawnSync, execFile } = require('child_process');
+const license = require('./license');
 
 // ── Deteksi Wine ──────────────────────────────────────────────────────────────
 // Winlator/BoxedWine (Android) butuh setelan GPU khusus (OpenGL/gladio).
@@ -124,6 +125,8 @@ let tray = null;
 let serverPort = 3000;
 let serverReady = false;
 let tunnelUrl = '';
+let licenseWindow = null;
+let appStarted = false;
 
 // ── Keluar & hak Administrator ────────────────────────────────────────────────
 const QUIT_SHORTCUT = 'Ctrl+Alt+Shift+Q';
@@ -713,6 +716,101 @@ ipcMain.handle('winlose-hotkeys', (e, enabled) => {
   return setWinloseHotkeys(!!enabled);
 });
 
+// ── Auth Key / lisensi ────────────────────────────────────────────────────────
+function isLicenseSender(e) {
+  return licenseWindow && !licenseWindow.isDestroyed() && e.sender === licenseWindow.webContents;
+}
+
+/** Tampilkan jendela masukin key. Belum valid → server.js TIDAK di-load. */
+function showLicenseWindow(status) {
+  log('[license] akses ditolak: ' + (status && status.reason) + ' — ' + (status && status.message));
+  if (licenseWindow && !licenseWindow.isDestroyed()) {
+    licenseWindow.focus();
+    return;
+  }
+  licenseWindow = new BrowserWindow({
+    width: 560,
+    height: 650,
+    resizable: false,
+    maximizable: false,
+    title: 'JekInteract — Auth Key',
+    icon: appIcon(),
+    backgroundColor: '#070b16',
+    webPreferences: {
+      preload: path.join(__dirname, 'license-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  try { licenseWindow.setMenuBarVisibility(false); } catch (_) {}
+  licenseWindow.loadFile(path.join(__dirname, 'license-window.html'));
+  licenseWindow.once('ready-to-show', () => {
+    if (licenseWindow && !licenseWindow.isDestroyed()) licenseWindow.show();
+  });
+  // Fallback kalau ready-to-show tidak fire (window manager aneh / Wine).
+  setTimeout(() => {
+    if (licenseWindow && !licenseWindow.isDestroyed() && !licenseWindow.isVisible()) licenseWindow.show();
+  }, 2000);
+  licenseWindow.on('closed', () => {
+    licenseWindow = null;
+    // Ditutup sebelum berhasil aktivasi → matikan aplikasi (jangan jalan diam-diam).
+    if (!appStarted) shutdownAndQuit();
+  });
+}
+
+/** Start server + dashboard + tray. Dipanggil hanya setelah lisensi valid. */
+async function startProtectedApp() {
+  if (appStarted) return;
+  appStarted = true;
+  try {
+    if (licenseWindow && !licenseWindow.isDestroyed()) licenseWindow.close();
+
+    const port = await startServer();
+    createWindow(port);
+    createTray(port);
+
+    log('[electron] menunggu tunnel Cloudflare...');
+    const url = await waitForTunnel(port);
+    if (url) {
+      injectTunnelUrl(url);
+    } else {
+      log('[electron] cloudflared tidak aktif — overlay links pakai localhost');
+    }
+  } catch (e) {
+    log('[electron] gagal start: ' + (e && e.stack ? e.stack : e));
+    dialog.showErrorBox('JekInteract - Gagal Start',
+      'Server tidak bisa dijalankan:\n\n' + (e && e.message ? e.message : e) + '\n\n' +
+      'Log lengkap:\n' + (LOG_FILES.length ? LOG_FILES.join('\n') : '(tidak tersedia)'));
+    app.quit();
+  }
+}
+
+ipcMain.handle('license:get-status', (e) => {
+  if (!isLicenseSender(e)) return { ok: false, reason: 'FORBIDDEN', message: 'Akses ditolak.' };
+  return license.getStatus();
+});
+
+ipcMain.handle('license:submit', async (e, key) => {
+  if (!isLicenseSender(e)) return { ok: false, reason: 'FORBIDDEN', message: 'Akses ditolak.' };
+  const r = await license.activate(key);
+  if (r.ok) {
+    log('[license] aktivasi berhasil — melanjutkan startup');
+    await startProtectedApp();
+  }
+  return r;
+});
+
+ipcMain.handle('license:retry', async (e) => {
+  if (!isLicenseSender(e)) return { ok: false, reason: 'FORBIDDEN', message: 'Akses ditolak.' };
+  const s = await license.verify();
+  if (s.ok) await startProtectedApp();
+  return s;
+});
+
+ipcMain.handle('license:quit', (e) => {
+  if (isLicenseSender(e)) shutdownAndQuit();
+});
+
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   const gotLock = app.requestSingleInstanceLock();
@@ -722,7 +820,9 @@ app.whenReady().then(async () => {
   }
 
   app.on('second-instance', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    if (licenseWindow && !licenseWindow.isDestroyed()) {
+      licenseWindow.focus();
+    } else if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
@@ -736,6 +836,7 @@ app.whenReady().then(async () => {
 
   initLog();
   captureConsole();
+  license.init(app, log);
   log('[electron] mulai — electron ' + process.versions.electron + ', node ' + process.versions.node +
       ', packaged=' + isPackaged + ', ROOT=' + ROOT);
   log('[electron] env: platform=' + process.platform + ' arch=' + process.arch +
@@ -761,34 +862,35 @@ app.whenReady().then(async () => {
     // Setup gagal tidak boleh menghalangi aplikasi berjalan (fallback keystroke lama).
   }
 
+  // ── Gate lisensi: jangan jalankan server sebelum key tervalidasi ──────────
+  let status;
   try {
-    const port = await startServer();
-
-    createWindow(port);
-    createTray(port);
-
-    log('[electron] menunggu tunnel Cloudflare...');
-    const url = await waitForTunnel(port);
-    if (url) {
-      injectTunnelUrl(url);
-    } else {
-      log('[electron] cloudflared tidak aktif — overlay links pakai localhost');
-    }
+    status = await license.verify();
   } catch (e) {
-    log('[electron] gagal start: ' + (e && e.stack ? e.stack : e));
-    dialog.showErrorBox('JekInteract - Gagal Start',
-      'Server tidak bisa dijalankan:\n\n' + (e && e.message ? e.message : e) + '\n\n' +
-      'Log lengkap:\n' + (LOG_FILES.length ? LOG_FILES.join('\n') : '(tidak tersedia)'));
-    app.quit();
+    log('[license] error saat verifikasi: ' + (e && e.stack ? e.stack : e));
+    status = {
+      ok: false, reason: 'LICENSE_ERROR',
+      message: 'Gagal mengecek lisensi: ' + (e && e.message ? e.message : String(e))
+    };
+  }
+
+  if (status.ok) {
+    await startProtectedApp();
+  } else {
+    showLicenseWindow(status);
   }
 });
 
 app.on('window-all-closed', () => {
-  // Tetap jalan di tray
+  // Tetap jalan di tray kalau app sudah aktif. Kalau yang ditutup jendela
+  // Auth Key sebelum aktivasi → jangan biarkan proses hidup tanpa server.
+  if (!appStarted && !licenseWindow) shutdownAndQuit();
 });
 
 app.on('activate', () => {
-  if (mainWindow === null && serverReady) {
+  if (licenseWindow && !licenseWindow.isDestroyed()) {
+    licenseWindow.focus();
+  } else if (mainWindow === null && serverReady) {
     createWindow(serverPort);
   }
 });
