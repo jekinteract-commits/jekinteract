@@ -538,7 +538,7 @@ function openInteractionForm(existing, onSave) {
     '<p class="hint">Centang satu atau lebih aksi yang dijalankan saat interaksi dipicu.</p>' +
     '<div class="trgs">' + TRIGGERS.map((t) => triggerBlockHTML(t, data)).join('') + '</div>' +
     keystrokeHintHTML() +
-    '</div></div>' +
+    '</div>' +
 
     '<div class="fgrp"><label class="lbl" for="if-vol">Volume Media</label>' +
     '<div class="rng"><input id="if-vol" type="range" min="0" max="100" step="1" value="' + data.volume + '"><output>' + data.volume + '%</output></div></div>' +
