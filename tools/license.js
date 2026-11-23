@@ -9,11 +9,13 @@
  *   ADMIN_TOKEN=rahasia-panjang-dari-secret
  *
  * Contoh:
- *   node tools/license.js gen --days 30 --note "Key Buat Andi"
+ *   node tools/license.js gen --days 30 --username "nobita_1940"
  *   node tools/license.js info --key JEKK-XXXX-XXXX-XXXX-XXXX
  *   node tools/license.js revoke --key JEKK-XXXX-XXXX-XXXX-XXXX
  *   node tools/license.js unbind --key JEKK-XXXX-XXXX-XXXX-XXXX
- *   node tools/license.js list
+ *   node tools/license.js list              # 200 key terakhir + waktu generate/expired
+ *
+ * Catatan: --note masih diterima sebagai alias lama dari --username.
  */
 
 const fs = require('fs');
@@ -42,11 +44,13 @@ function usage() {
   console.log(`JekInteract License CLI
 
 Usage:
-  node tools/license.js gen    --days 30 [--note "Nama"] [--max 1]
+  node tools/license.js gen    --days 30 [--username "nobita_1940"] [--max 1]
   node tools/license.js info   --key JEKK-XXXX-XXXX-XXXX-XXXX
   node tools/license.js revoke --key JEKK-XXXX-XXXX-XXXX-XXXX
   node tools/license.js unbind --key JEKK-XXXX-XXXX-XXXX-XXXX [--hwid W-XXXX]
   node tools/license.js list
+
+  --note "..."  alias lama untuk --username (tetap didukung)
 
 Config: tools/.env (LICENSE_URL, ADMIN_TOKEN)
 `);
@@ -69,13 +73,21 @@ function args() {
 async function call(pathname, body = {}, method = 'POST') {
   if (!LICENSE_URL) throw new Error('LICENSE_URL belum diisi. Copy tools/.env.example -> tools/.env');
   if (!ADMIN_TOKEN) throw new Error('ADMIN_TOKEN belum diisi di tools/.env');
+
+  // Endpoint GET (list) baca token dari query string, bukan dari body.
+  const isGet = method === 'GET';
+  const url = isGet
+    ? LICENSE_URL + pathname + (pathname.includes('?') ? '&' : '?') +
+      'adminToken=' + encodeURIComponent(ADMIN_TOKEN)
+    : LICENSE_URL + pathname;
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
   try {
-    const res = await fetch(LICENSE_URL + pathname, {
+    const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
-      body: method === 'GET' ? undefined : JSON.stringify({ ...body, adminToken: ADMIN_TOKEN }),
+      headers: isGet ? {} : { 'Content-Type': 'application/json' },
+      body: isGet ? undefined : JSON.stringify({ ...body, adminToken: ADMIN_TOKEN }),
       signal: controller.signal
     });
     const text = await res.text();
@@ -90,27 +102,48 @@ async function call(pathname, body = {}, method = 'POST') {
   }
 }
 
+// Server menyimpan key tanpa dash; rapikan jadi JEKK-XXXX-XXXX-XXXX-XXXX di CLI.
+function prettyKey(value) {
+  const s = String(value || '').replace(/\s+/g, '').replace(/-/g, '').toUpperCase();
+  const body = s.replace(/^JEKK/, '');
+  return body ? 'JEKK-' + (body.match(/.{1,4}/g) || []).join('-') : s;
+}
+
+// Tampilkan waktu dalam timezone lokal Termux: YYYY-MM-DD HH:mm
+function fmtTime(value) {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 16).replace('T', ' ');
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+    ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
 function printKey(data) {
   console.log('\n  KEY BARU:  ' + data.key);
-  console.log('  Berlaku : ' + data.days + ' hari, sampai ' + data.expiresAt.slice(0, 10));
-  console.log('  Device  : maksimal ' + data.maxDevices + ' PC');
-  if (data.note) console.log('  Catatan : ' + data.note);
+  console.log('  Berlaku            : ' + data.days + ' hari, sampai ' + fmtTime(data.expiresAt));
+  console.log('  Device             : maksimal ' + data.maxDevices + ' PC');
+  if (data.note) console.log('  Username Tiktok    : ' + data.note);
   console.log('  Kirim key ini ke user. Setelah generate, HP lu boleh mati.\n');
 }
 
 (async () => {
   const cmd = (process.argv[2] || '').toLowerCase();
   const o = args();
-  if (!cmd || cmd === 'help' || o.help) { usage(); return; }
+  if (!cmd || cmd === 'help' || cmd.startsWith('-') || o.help) { usage(); return; }
 
   if (cmd === 'gen' || cmd === 'generate') {
     const days = o.days ? parseInt(o.days, 10) : 30;
     if (!Number.isFinite(days) || days < 1 || days > 3650) {
       throw new Error('--days harus angka 1 sampai 3650');
     }
+    // --username dipakai bareng --note sebagai alias backward-compatible.
+    const username = typeof o.username === 'string'
+      ? o.username
+      : (typeof o.note === 'string' ? o.note : '');
     const data = await call('/api/admin/generate', {
       days,
-      note: typeof o.note === 'string' ? o.note : '',
+      note: username,
       maxDevices: o.max ? parseInt(o.max, 10) : 1
     });
     printKey(data);
@@ -120,13 +153,14 @@ function printKey(data) {
   if (cmd === 'info') {
     if (!o.key) throw new Error('--key wajib diisi');
     const d = await call('/api/admin/info', { key: o.key });
-    console.log('\nKey         : ' + d.key);
-    console.log('Catatan     : ' + (d.note || '-'));
-    console.log('Durasi      : ' + d.days + ' hari');
-    console.log('Expired     : ' + d.expiresAt.slice(0, 10));
-    console.log('Status      : ' + (d.revoked ? 'DICABUT' : 'aktif'));
-    console.log('Device      : ' + d.devices.length + '/' + d.maxDevices);
-    d.devices.forEach((dev) => console.log('  - ' + dev.hwid + '  (last ' + dev.last_seen + ')'));
+    console.log('\nKey                : ' + d.key);
+    console.log('Username Tiktok    : ' + (d.note || '-'));
+    console.log('Dibuat             : ' + fmtTime(d.createdAt));
+    console.log('Durasi             : ' + d.days + ' hari');
+    console.log('Expired            : ' + fmtTime(d.expiresAt));
+    console.log('Status             : ' + (d.revoked ? 'DICABUT' : 'aktif'));
+    console.log('Device             : ' + d.devices.length + '/' + d.maxDevices);
+    d.devices.forEach((dev) => console.log('  - ' + dev.hwid + '  (last ' + fmtTime(dev.last_seen) + ')'));
     console.log('');
     return;
   }
@@ -148,17 +182,18 @@ function printKey(data) {
   if (cmd === 'list') {
     const d = await call('/api/admin/list', {}, 'GET');
     if (!d.keys.length) { console.log('Belum ada key.\n'); return; }
-    console.log('\nKEY                       EXPIRED     STATUS   DEVICE  CATATAN');
+    console.log('\nKEY                       DIBUAT           EXPIRED          STATUS   DEVICE  USERNAME TIKTOK');
     d.keys.forEach((k) => {
       console.log(
-        k.key.padEnd(25) +
-        String(k.expires_at).slice(0, 10).padEnd(12) +
+        prettyKey(k.key).padEnd(25) +
+        fmtTime(k.created_at).padEnd(17) +
+        fmtTime(k.expires_at).padEnd(17) +
         (k.revoked ? 'DICABUT ' : 'aktif   ') +
         String(k.max_devices).padEnd(8) +
         (k.note || '-')
       );
     });
-    console.log('');
+    console.log('\nTotal: ' + d.keys.length + ' key (maksimal 200 terakhir dari server).\n');
     return;
   }
 

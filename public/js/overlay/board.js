@@ -11,6 +11,17 @@ import { esc } from '../lib/dom.js';
 const ROW = 64;
 const FACTOR = { realtime: 1, '7d': 8, '14d': 15, '30d': 30 };
 const SRC_LABEL = { realtime: 'Realtime', '7d': '7 hari terakhir', '14d': '14 hari terakhir', '30d': '30 hari terakhir' };
+const DEFAULT_SUBTITLE = {
+  likes: 'Terimakasih Sudah Tap Tap',
+  gifters: 'Terimakasih Orang Baik'
+};
+
+/** Teks subtitle overlay; config lama yang belum punya subtitle tetap pakai default. */
+function subtitleText(cfg, isLikes) {
+  return cfg.subtitle == null
+    ? (isLikes ? DEFAULT_SUBTITLE.likes : DEFAULT_SUBTITLE.gifters)
+    : String(cfg.subtitle);
+}
 
 export default function mount(ctx) {
   const { root, Sync, type, preview } = ctx;
@@ -20,7 +31,7 @@ export default function mount(ctx) {
   root.innerHTML =
     '<div class="ovp cut brd ' + type + '">' +
     '<div class="brd-h"><span class="brd-ic">' + icon(isLikes ? 'heart' : 'crown') + '</span>' +
-    '<div><b>' + (isLikes ? 'Top 10 Like' : 'Top Gifter') + '</b><small id="b-sub"></small></div></div>' +
+    '<div><b>' + (isLikes ? 'Top Like/Tap Tap' : 'Top Gifter') + '</b><small id="b-sub"></small></div></div>' +
     '<div class="brd-list" id="b-list" style="height:' + ROW * 10 + 'px"><div class="brd-empty" id="b-empty" hidden>Belum ada data</div></div>' +
     '</div>';
 
@@ -33,8 +44,8 @@ export default function mount(ctx) {
 
   const cfg = () =>
     isLikes
-      ? Object.assign({ decayOn: true, amount: 2, every: 8 }, Sync.get('likesCfg', {}))
-      : Object.assign({ source: 'realtime' }, Sync.get('gifterCfg', {}));
+      ? Object.assign({ decayOn: false, amount: 2, every: 8, subtitle: DEFAULT_SUBTITLE.likes }, Sync.get('likesCfg', {}))
+      : Object.assign({ source: 'realtime', subtitle: DEFAULT_SUBTITLE.gifters }, Sync.get('gifterCfg', {}));
 
   // Apakah sedang dalam mode live (TikTok sudah connect)?
   // Tracked via flag — diset true saat connected, false saat disconnected.
@@ -117,14 +128,7 @@ export default function mount(ctx) {
   }
 
   function subtitle() {
-    const c = cfg();
-    if (liveMode) {
-      sub.textContent = 'Data live TikTok';
-    } else if (isLikes) {
-      sub.textContent = c.decayOn ? 'Tap-tap terbanyak, berkurang otomatis' : 'Tap-tap terbanyak';
-    } else {
-      sub.textContent = SRC_LABEL[c.source] || 'Realtime';
-    }
+    sub.textContent = subtitleText(cfg(), isLikes);
   }
 
   /* -------- Demo data (dipakai saat TikTok belum terhubung) -------- */
@@ -246,7 +250,8 @@ export default function mount(ctx) {
       subtitle();
     }
     if (isGifters && (e.key === 'gifterCfg' || e.key === '*')) {
-      if (!liveMode) { seed(); subtitle(); layout(buildDemoEntries()); }
+      if (!liveMode) { seed(); layout(buildDemoEntries()); }
+      subtitle();
     }
     if (isGifters && e.key === 'cmd-gifters') {
       if (liveMode) {

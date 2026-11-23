@@ -1337,6 +1337,8 @@ function goalsStateObj() {
     const s = saved[k] || {};
     const target = Math.max(1, Number(s.target) || GOAL_DEF[k]);
     out[k] = { target, current: Math.min(goalCounters[k], target) };
+    // Pertahankan label custom overlay (mis. Goal Coin) saat state goals dibangun ulang.
+    if (typeof s.label === 'string') out[k].label = s.label;
   });
   return out;
 }

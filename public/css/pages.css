@@ -142,6 +142,20 @@
 
 /* ---------- Pusat Interaksi ---------- */
 .scr-sum { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* toolbar pencarian + filter daftar interaksi/aktivitas */
+.list-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: -2px 0 14px; }
+.list-tools .lt-search { flex: 1 1 220px; min-height: 40px; }
+.list-tools .lt-filter { flex: 0 1 260px; min-height: 40px; position: relative; }
+.list-tools .lt-filter > select { padding: 8px 38px 8px 12px; font-size: 13.5px; }
+.list-tools .lt-reset { margin-left: auto; }
+.list-tools .lt-reset[hidden] { display: none; }
+.list-tools .lt-count { color: var(--txt-3); font-size: 12.5px; white-space: nowrap; }
+@media (max-width: 640px) {
+  .list-tools .lt-filter { flex: 1 1 100%; }
+  .list-tools .lt-reset { margin-left: 0; }
+}
+
 .list { display: flex; flex-direction: column; gap: 10px; }
 .itm, .act { --c: 10px; --bg: var(--ink-0); --bd: var(--line-2); display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 6px; }
 .act.off .itm-txt { opacity: .5; }
@@ -159,6 +173,9 @@
 .itm-ico.c-key, .trg-ico.c-key { color: var(--violet-t); border-color: rgba(139, 92, 255, .5); }
 .itm-ico.c-obs, .trg-ico.c-obs { color: var(--mint); border-color: rgba(57, 255, 154, .4); }
 .itm-ico.c-act { color: var(--cyan); }
+.itm-ico .gift-list-img { width: 30px; height: 30px; object-fit: contain; }
+.itm-ico .gift-list-e, .itm-ico .gift-list-fb { font-size: 24px; line-height: 1; }
+.itm-ico .gift-list-fb svg { width: 22px; height: 22px; }
 .itm-txt { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .itm-txt b { font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .15s; }
 .itm-txt small { color: var(--txt-2); font-size: 13px; line-height: 1.35; }

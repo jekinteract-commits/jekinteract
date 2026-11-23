@@ -59,7 +59,64 @@ const blankActivity = () => ({
   action: { mode: 'single', id: '', ids: [] }
 });
 
-const triggerList = (it) => TRIGGERS.filter((t) => it.triggers[t.k]);
+const triggerList = (it) => TRIGGERS.filter((t) => it.triggers && it.triggers[t.k]);
+
+/** Toolbar pencarian + filter yang dipakai daftar Interaksi & Aktivitas. */
+function listToolsHTML(kind, placeholder, allLabel, options) {
+  return (
+    '<div class="list-tools">' +
+    '<div class="field pre lt-search"><i>' + icon('search') + '</i>' +
+    '<input type="search" id="' + kind + '-q" autocomplete="off" spellcheck="false" placeholder="' + esc(placeholder) + '" aria-label="' + esc(placeholder) + '"></div>' +
+    '<div class="field sel lt-filter"><select id="' + kind + '-f" aria-label="' + esc(allLabel) + '">' +
+    '<option value="">' + esc(allLabel) + '</option>' + options + '</select></div>' +
+    '<button type="button" class="btn icon sm ghost lt-reset" data-act="' + kind + '-reset" title="Reset pencarian & filter" aria-label="Reset pencarian dan filter" hidden>' + icon('x') + '</button>' +
+    '<span class="lt-count" id="' + kind + '-count"></span>' +
+    '</div>'
+  );
+}
+
+/** Cocokkan interaksi dengan kata kunci nama + filter Action Trigger. */
+function matchesInteraction(it, q, filter) {
+  if (filter && !(it.triggers && it.triggers[filter])) return false;
+  return !q || String(it.name || '').toLowerCase().includes(q);
+}
+
+/** Cocokkan aktivitas dengan kata kunci (label event + detail/nama gift) + filter event. */
+function matchesActivity(a, q, filter) {
+  const w = a.when || {};
+  if (filter && w.type !== filter) return false;
+  if (!q) return true;
+  const hay = [WHEN_LABEL[w.type], whenText(w), w.gift].filter(Boolean).join(' ').toLowerCase();
+  return hay.includes(q);
+}
+
+const normGiftName = (s) => String(s == null ? '' : s).trim().toLowerCase();
+
+/** Cek apakah nama gift sudah dipakai aktivitas "Kirim Gift Tertentu" lain. */
+function giftAlreadyUsed(list, gift, exceptId) {
+  const target = normGiftName(gift);
+  if (!target) return false;
+  return (list || []).some((a) =>
+    a && a.id !== exceptId && a.when && a.when.type === 'gift_specific' &&
+    normGiftName(a.when.gift) === target
+  );
+}
+
+/** Ikon list aktivitas: pakai gambar/emoji gift asli untuk "Kirim Gift Tertentu". */
+function whenIconHTML(when, giftByName) {
+  if (when.type === 'gift_specific') {
+    const g = giftByName.get(String(when.gift || '').toLowerCase()) || {};
+    const src = when.giftImage || g.image;
+    const emoji = when.giftEmoji || g.emoji;
+    if (src) {
+      // Kalau gambar gagal dimuat, tampilkan emoji gift / ikon kado sebagai cadangan.
+      return '<img class="gift-list-img" src="' + esc(src) + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'grid\'">' +
+        '<span class="gift-list-fb" style="display:none">' + (emoji ? esc(emoji) : icon('gift')) + '</span>';
+    }
+    if (emoji) return '<span class="gift-list-e" aria-hidden="true">' + esc(emoji) + '</span>';
+  }
+  return icon(WHEN_ICON[when.type] || 'bolt');
+}
 
 /* ------------------------------------------------------------------ */
 /* Halaman                                                             */
@@ -84,12 +141,16 @@ export default {
       '<section class="panel">' +
       '<div class="fh"><div class="fh-t"><h2>Interaksi</h2><div class="sub">Aksi yang bisa dipicu: gambar, video, audio, keystroke, atau pindah scene OBS.</div></div>' +
       '<button type="button" class="btn primary" data-act="int-add">' + icon('plus') + 'Tambah Interaksi</button></div>' +
+      listToolsHTML('int', 'Cari nama interaksi...', 'Semua Trigger', TRIGGERS.map((t) =>
+        '<option value="' + t.k + '">' + esc(t.label) + '</option>').join('')) +
       '<div class="list" id="int-list"></div>' +
       '</section>' +
 
       '<section class="panel">' +
       '<div class="fh"><div class="fh-t"><h2>Aktivitas</h2><div class="sub">Atur kapan sebuah interaksi dijalankan, misalnya saat ada gift tertentu.</div></div>' +
       '<button type="button" class="btn primary" data-act="act-add">' + icon('plus') + 'Tambah Aktivitas</button></div>' +
+      listToolsHTML('act', 'Cari event atau nama gift...', 'Semua Event', Object.keys(WHEN_LABEL).map((v) =>
+        '<option value="' + v + '">' + esc(WHEN_LABEL[v]) + '</option>').join('')) +
       '<div class="list" id="act-list"></div>' +
       '</section>' +
       '</div>'
@@ -110,13 +171,44 @@ export default {
     paintScreens();
     d(Sync.on('status', paintScreens));
 
+    /* ---------- pencarian & filter (UI saja, tidak ikut tersimpan) ---------- */
+    let intQuery = '';
+    let actQuery = '';
+    let intFilter = '';
+    let actFilter = '';
+    let giftByName = new Map();
+
+    const setToolbar = (kind, shown, total, active) => {
+      const count = $('#' + kind + '-count', root);
+      if (count) count.textContent = shown === total ? total + ' item' : shown + ' dari ' + total + ' item';
+      const reset = $('#' + kind + '-reset', root);
+      if (reset) reset.hidden = !active;
+    };
+
+    /** Pasang listener input/change pada toolbar; dilepas saat pindah halaman. */
+    const bindTool = (sel, evt, fn) => {
+      const el = $(sel, root);
+      if (!el) return;
+      const handler = () => fn(el);
+      el.addEventListener(evt, handler);
+      d(() => el.removeEventListener(evt, handler));
+    };
+
     /* ---------- daftar interaksi ---------- */
     const paintInts = () => {
-      const list = loadInts();
+      const all = loadInts();
+      const q = intQuery;
+      const list = all.filter((it) => matchesInteraction(it, q, intFilter));
       const host = $('#int-list', root);
-      if (!list.length) {
+      setToolbar('int', list.length, all.length, !!intQuery || !!intFilter);
+      if (!all.length) {
         host.innerHTML =
           '<div class="empty">' + icon('gamepad') + '<b>Belum ada interaksi</b><span>Tekan Tambah Interaksi untuk membuat yang pertama.</span></div>';
+        return;
+      }
+      if (!list.length) {
+        host.innerHTML =
+          '<div class="empty">' + icon('search') + '<b>Tidak ada interaksi yang cocok</b><span>Coba kata kunci atau filter lain.</span></div>';
         return;
       }
       host.innerHTML = list.map(intItemHTML).join('');
@@ -124,17 +216,25 @@ export default {
 
     /* ---------- daftar aktivitas ---------- */
     const paintActs = () => {
-      const list = loadActs();
+      const all = loadActs();
       const ints = loadInts();
+      const q = actQuery;
+      const list = all.filter((a) => matchesActivity(a, q, actFilter));
       const host = $('#act-list', root);
-      if (!list.length) {
+      setToolbar('act', list.length, all.length, !!actQuery || !!actFilter);
+      if (!all.length) {
         host.innerHTML =
           '<div class="empty">' + icon('bolt') + '<b>Belum ada aktivitas</b><span>' +
           (ints.length ? 'Tekan Tambah Aktivitas untuk menghubungkan event TikTok ke interaksi.' : 'Buat interaksi dulu, lalu hubungkan ke event TikTok di sini.') +
           '</span></div>';
         return;
       }
-      host.innerHTML = list.map((a) => actItemHTML(a, ints)).join('');
+      if (!list.length) {
+        host.innerHTML =
+          '<div class="empty">' + icon('search') + '<b>Tidak ada aktivitas yang cocok</b><span>Coba kata kunci atau filter lain.</span></div>';
+        return;
+      }
+      host.innerHTML = list.map((a) => actItemHTML(a, ints, giftByName)).join('');
     };
 
     const paintAll = () => {
@@ -142,6 +242,27 @@ export default {
       paintActs();
     };
     paintAll();
+
+    bindTool('#int-q', 'input', (el) => { intQuery = el.value.trim().toLowerCase(); paintInts(); });
+    bindTool('#int-f', 'change', (el) => { intFilter = el.value; paintInts(); });
+    bindTool('#act-q', 'input', (el) => { actQuery = el.value.trim().toLowerCase(); paintActs(); });
+    bindTool('#act-f', 'change', (el) => { actFilter = el.value; paintActs(); });
+
+    const resetTool = (kind) => {
+      const q = $('#' + kind + '-q', root);
+      const f = $('#' + kind + '-f', root);
+      if (q) q.value = '';
+      if (f) f.value = '';
+      if (kind === 'int') { intQuery = ''; intFilter = ''; paintInts(); }
+      else { actQuery = ''; actFilter = ''; paintActs(); }
+    };
+
+    // Data gift dipakai supaya ikon "Kirim Gift Tertentu" di daftar aktivitas
+    // menampilkan gambar/emoji gift yang dipilih (aktivitas lama ikut ter-update).
+    loadGifts().then((gifts) => {
+      giftByName = new Map((gifts || []).filter((g) => g && g.name).map((g) => [String(g.name).toLowerCase(), g]));
+      paintActs();
+    }).catch(() => {});
 
     // Status keystroke (admin / mesin aktif) dipakai di form Interaksi.
     API.keystrokeStatus().then((s) => { ksStatus = s; }).catch(() => { ksStatus = null; });
@@ -169,12 +290,19 @@ export default {
       const row = btn.closest('[data-id]');
       const id = row ? row.dataset.id : '';
 
+      if (act === 'int-reset') return resetTool('int');
+      if (act === 'act-reset') return resetTool('act');
+
+      // Tombol header tidak punya row [data-id], jadi ditangani lebih dulu.
       if (act === 'links') return openLinks();
       if (act === 'int-add') return openInteractionForm(null, (data) => saveInt(data, paintAll));
       if (act === 'act-add') {
         if (!loadInts().length) return toast('Tambahkan interaksi dulu sebelum membuat aktivitas.', 'warn');
         return openActivityForm(null, (data) => saveAct(data, paintAll));
       }
+
+      // Sisanya adalah aksi per-baris (edit/play/dup/del) — butuh row.
+      if (!row) return;
 
       if (act === 'edit' && row.classList.contains('itm')) {
         const it = loadInts().find((x) => x.id === id);
@@ -200,6 +328,10 @@ export default {
           const list = loadActs();
           const i = list.findIndex((x) => x.id === id);
           if (i < 0) return;
+          const w = list[i].when || {};
+          if (w.type === 'gift_specific' && giftAlreadyUsed(list, w.gift)) {
+            return toast('Aktivitas untuk gift "' + w.gift + '" sudah tersedia. Gift yang sama tidak bisa diduplikat.', 'warn');
+          }
           const copy = clone(list[i]);
           copy.id = uid('act');
           list.splice(i + 1, 0, copy);
@@ -284,12 +416,12 @@ function actionText(a, ints) {
   return it ? it.name : null;
 }
 
-function actItemHTML(a, ints) {
+function actItemHTML(a, ints, giftByName) {
   const act = actionText(a, ints);
   const actMissing = act === null;
   return (
     '<div class="act' + (a.enabled ? '' : ' off') + (actMissing ? ' act-miss' : '') + '" data-id="' + esc(a.id) + '">' +
-    '<span class="itm-ico c-act">' + icon(WHEN_ICON[a.when.type] || 'bolt') + '</span>' +
+    '<span class="itm-ico c-act">' + whenIconHTML(a.when || {}, giftByName || new Map()) + '</span>' +
     '<span class="itm-txt"><b>' + esc(whenText(a.when)) + '</b>' +
     '<small>' + esc(WHO_LABEL[a.who] || a.who) + ' • Memicu ' + (actMissing ? '<em class="miss">interaksi sudah dihapus</em>' : esc(act)) + '</small></span>' +
     '<div class="itm-act">' +
@@ -313,6 +445,11 @@ function saveInt(data, done) {
 
 function saveAct(data, done) {
   const list = loadActs();
+  // Pengaman terakhir: gift yang sama tidak boleh tersimpan dua kali.
+  if (data.when && data.when.type === 'gift_specific' && giftAlreadyUsed(list, data.when.gift, data.id)) {
+    toast('Aktivitas untuk gift "' + data.when.gift + '" sudah tersedia. Gift yang sama tidak bisa ditambahkan dua kali.', 'warn');
+    return false;
+  }
   const i = list.findIndex((x) => x.id === data.id);
   if (i >= 0) list[i] = data;
   else list.push(data);
@@ -1108,6 +1245,16 @@ function openActivityForm(existing, onSave) {
   };
   let _gifts = [];
 
+  // Simpan gambar/emoji gift bersama aktivitas supaya ikon di daftar tetap
+  // benar walaupun data gift sedang tidak tersedia. Field ini tidak dipakai
+  // server untuk pencocokan event (server tetap memakai when.gift).
+  const applyGiftMeta = () => {
+    const g = _gifts.find((x) => x && x.name === data.when.gift);
+    if (!g) return;
+    data.when.giftImage = g.image || '';
+    data.when.giftEmoji = g.emoji || '';
+  };
+
   const paintGifts = () => {
     const q = m.$('#gp-q').value.trim().toLowerCase();
     const list = _gifts.filter((g) => !q || g.name.toLowerCase().includes(q));
@@ -1139,6 +1286,7 @@ function openActivityForm(existing, onSave) {
     const b = e.target.closest('[data-gift]');
     if (!b) return;
     data.when.gift = b.dataset.gift;
+    applyGiftMeta();
     paintGifts();
   });
   showWhenExtra();
@@ -1170,10 +1318,14 @@ function openActivityForm(existing, onSave) {
     }
 
     const w = data.when;
+    if (w.type === 'gift_specific') applyGiftMeta();
     if (w.type === 'comment_exact' && !w.text) return fail('Isi komentar yang memicu belum diisi.', '[data-x="comment_exact"]');
     if (w.type === 'gift_min' && !(w.coins >= 1)) return fail('Minimal coin harus 1 atau lebih.', '[data-x="gift_min"]');
     if (w.type === 'like_min' && !(w.likes >= 1)) return fail('Minimal jumlah like harus 1 atau lebih.', '[data-x="like_min"]');
     if (w.type === 'gift_specific' && !w.gift) return fail('Pilih gift yang memicu aktivitas ini.', '[data-x="gift_specific"]');
+    if (w.type === 'gift_specific' && giftAlreadyUsed(loadActs(), w.gift, data.id)) {
+      return fail('Aktivitas untuk gift "' + w.gift + '" sudah tersedia. Gift yang sama tidak bisa ditambahkan dua kali.', '[data-x="gift_specific"]');
+    }
     if (data.action.mode === 'random' && data.action.ids.length < 2) return fail('Pilih minimal 2 interaksi untuk dipicu secara acak.', '#af-rnd');
 
     onSave(data);

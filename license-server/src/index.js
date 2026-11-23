@@ -204,21 +204,26 @@ export default {
         return ok({ service: 'jek-license', version: 1 });
       }
 
-      if (request.method !== 'POST') return fail('NOT_FOUND', 'Endpoint tidak ditemukan.', 404);
-
+      // Body JSON cuma diperlukan endpoint POST. Endpoint admin GET (list)
+      // baca adminToken dari query string lewat isAdmin().
       let body = {};
-      try {
-        body = await request.json();
-      } catch (_) {
-        return fail('BAD_JSON', 'Body harus JSON.');
+      if (request.method === 'POST') {
+        try {
+          body = await request.json();
+        } catch (_) {
+          return fail('BAD_JSON', 'Body harus JSON.');
+        }
       }
+
+      // Routing admin harus sebelum gate POST, supaya GET /api/admin/list lolos.
+      if (pathname.startsWith('/api/admin/')) {
+        return await handleAdmin(request, env, pathname, body);
+      }
+
+      if (request.method !== 'POST') return fail('NOT_FOUND', 'Endpoint tidak ditemukan.', 404);
 
       if (pathname === '/api/license/activate' || pathname === '/api/license/check') {
         return await handleActivate(request, env, body);
-      }
-
-      if (pathname.startsWith('/api/admin/')) {
-        return await handleAdmin(request, env, pathname, body);
       }
 
       return fail('NOT_FOUND', 'Endpoint tidak ditemukan.', 404);

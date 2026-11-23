@@ -1,10 +1,10 @@
-import { $, disposer } from '../lib/dom.js';
+import { $, esc, disposer } from '../lib/dom.js';
 import { icon } from '../lib/icons.js';
 import { Sync } from '../lib/sync.js';
 import { OVERLAYS } from '../lib/overlays.js';
 import { toast, linkRowHTML, previewHTML, statusHTML, bindStatuses, mountPreviews, postToPreview } from '../lib/ui.js';
 
-export const LIKES_DEFAULT = { decayOn: true, amount: 2, every: 8 };
+export const LIKES_DEFAULT = { decayOn: false, amount: 2, every: 8, subtitle: 'Terimakasih Sudah Tap Tap' };
 
 export default {
   id: 'likes',
@@ -26,6 +26,13 @@ export default {
       '<section class="panel">' +
       '<div class="fh"><div class="fh-t"><h2>Status Data</h2><div class="sub">Sumber data yang saat ini ditampilkan di overlay.</div></div></div>' +
       '<div id="lk-data-status"></div>' +
+      '</section>' +
+
+      '<section class="panel">' +
+      '<div class="fh"><div class="fh-t"><h2>Teks Overlay</h2><div class="sub">Tulisan yang tampil di bawah judul overlay.</div></div></div>' +
+      '<div class="fgrp"><label class="lbl" for="lk-sub">Subtitle Like Leaderboard</label>' +
+      '<div class="field"><input id="lk-sub" type="text" maxlength="100" autocomplete="off" placeholder="Terimakasih Sudah Tap Tap" value="' + esc(c.subtitle) + '"></div>' +
+      '<p class="hint">Kosongkan untuk menyembunyikan tulisan ini.</p></div>' +
       '</section>' +
 
       '<section class="panel">' +
@@ -92,9 +99,11 @@ export default {
         const onEl = $('#lk-on', root);
         const amtEl = $('#lk-amt', root);
         const intEl = $('#lk-int', root);
+        const subEl = $('#lk-sub', root);
         if (onEl && document.activeElement !== onEl) onEl.checked = !!c.decayOn;
         if (amtEl && document.activeElement !== amtEl) amtEl.value = c.amount;
         if (intEl && document.activeElement !== intEl) intEl.value = c.every;
+        if (subEl && document.activeElement !== subEl) subEl.value = c.subtitle == null ? LIKES_DEFAULT.subtitle : String(c.subtitle);
       })
       .catch(() => {});
 
@@ -122,7 +131,12 @@ export default {
       const every = Math.round(Number($('#lk-int', root).value));
       if (!(amount >= 1)) return toast('Jumlah pengurangan minimal 1.', 'err');
       if (!(every >= 1)) return toast('Interval minimal 1 detik.', 'err');
-      Sync.set('likesCfg', { decayOn: $('#lk-on', root).checked, amount, every });
+      Sync.set('likesCfg', {
+        decayOn: $('#lk-on', root).checked,
+        amount,
+        every,
+        subtitle: $('#lk-sub', root).value.trim()
+      });
       toast('Pengaturan leaderboard disimpan.', 'ok');
     });
 

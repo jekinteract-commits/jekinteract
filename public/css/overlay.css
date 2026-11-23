@@ -159,6 +159,31 @@ body.bg { background: conic-gradient(#171233 25%, #0f0b22 0 50%, #171233 0 75%, 
 @keyframes valup { 30% { color: #fff; text-shadow: 0 0 14px currentColor; } }
 .brd-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--txt-2); font: 600 16px var(--f-ui); }
 
+/* Leaderboard latar transparan — hanya overlay Like/Top Gifter.
+   `.cut` memakai background: var(--bd) sebagai bingkai; kalau cuma ::before
+   dibikin transparan, gradient bingkai itu malah tampil penuh. Makanya latar
+   elemennya juga kita transparent, lalu bingkai digambar ulang pakai inset shadow. */
+.ovp.cut.brd {
+  --bg: transparent;
+  background: transparent;
+  box-shadow:
+    inset 0 0 0 var(--bw) rgba(139, 92, 255, .55),
+    inset 2px 2px 0 rgba(41, 243, 255, .75),
+    inset -2px -2px 0 rgba(255, 45, 143, .75);
+}
+.ovp.cut.brd::before { background: transparent; }
+.ovp.cut.brd .brd-row,
+.ovp.cut.brd .brd-row[data-rank="1"],
+.ovp.cut.brd .brd-row[data-rank="2"],
+.ovp.cut.brd .brd-row[data-rank="3"] { background: transparent; }
+.ovp.cut.brd .brd-h b,
+.ovp.cut.brd .brd-h small,
+.ovp.cut.brd .brd-name,
+.ovp.cut.brd .brd-val,
+.ovp.cut.brd .brd-rank { text-shadow: 0 1px 5px rgba(0, 0, 0, .95), 0 0 10px currentColor; }
+/* Shadow foto profil, senada dengan shadow teks */
+.ovp.cut.brd .brd-av { filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .95)) drop-shadow(0 0 10px rgba(41, 243, 255, .55)); }
+
 /* ---------- Chat / Komen ---------- */
 .chat-wrap { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 8px; overflow: hidden; }
 .chat-list { display: flex; flex-direction: column; gap: 10px; }

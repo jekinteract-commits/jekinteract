@@ -1,4 +1,4 @@
-import { $, disposer } from '../lib/dom.js';
+import { $, esc, disposer } from '../lib/dom.js';
 import { icon } from '../lib/icons.js';
 import { Sync } from '../lib/sync.js';
 import { OVERLAYS } from '../lib/overlays.js';
@@ -10,6 +10,7 @@ const SOURCES = [
   ['14d', '14 Hari Terakhir', 'Menampilkan data selama 14 hari terakhir.'],
   ['30d', '30 Hari Terakhir', 'Menampilkan data selama 30 hari terakhir.']
 ];
+const GIFTERS_DEFAULT = { source: 'realtime', subtitle: 'Terimakasih Orang Baik' };
 
 export default {
   id: 'gifters',
@@ -18,7 +19,7 @@ export default {
 
   render() {
     const ov = OVERLAYS.gifters;
-    const c = Object.assign({ source: 'realtime' }, Sync.get('gifterCfg', {}));
+    const c = Object.assign({}, GIFTERS_DEFAULT, Sync.get('gifterCfg', {}));
     const cur = SOURCES.find((s) => s[0] === c.source) || SOURCES[0];
     return (
       '<div class="ph"><h1>Top Gifter Leaderboard</h1><p>Tampilkan peringkat 10 penonton berdasarkan jumlah koin yang diberikan saat live berlangsung.</p></div>' +
@@ -36,6 +37,9 @@ export default {
       '<div class="field sel"><select id="gf-src">' +
       SOURCES.map(([v, l]) => '<option value="' + v + '"' + (c.source === v ? ' selected' : '') + '>' + l + '</option>').join('') +
       '</select></div><p class="hint" id="gf-src-desc">' + cur[2] + '</p></div>' +
+      '<div class="fgrp"><label class="lbl" for="gf-sub">Subtitle Top Gifter</label>' +
+      '<div class="field"><input id="gf-sub" type="text" maxlength="100" autocomplete="off" placeholder="Terimakasih Orang Baik" value="' + esc(c.subtitle) + '"></div>' +
+      '<p class="hint">Tulisan di bawah judul overlay. Kosongkan untuk menyembunyikan.</p></div>' +
       '<div class="row"><button type="button" class="btn primary" id="gf-save">' + icon('save') + 'Simpan</button></div>' +
       '</section>' +
 
@@ -58,7 +62,8 @@ export default {
       .then((res) => {
         if (!res || res.value == null) return;
         Sync.state['gifterCfg'] = res.value;
-        const src = res.value.source || 'realtime';
+        const c = Object.assign({}, GIFTERS_DEFAULT, res.value);
+        const src = c.source || 'realtime';
         const sel = $('#gf-src', root);
         if (sel && document.activeElement !== sel) {
           sel.value = src;
@@ -66,6 +71,8 @@ export default {
           const desc = $('#gf-src-desc', root);
           if (s && desc) desc.textContent = s[2];
         }
+        const subEl = $('#gf-sub', root);
+        if (subEl && document.activeElement !== subEl) subEl.value = String(c.subtitle);
       })
       .catch(() => {});
 
@@ -75,8 +82,11 @@ export default {
     });
 
     $('#gf-save', root).addEventListener('click', () => {
-      Sync.set('gifterCfg', { source: $('#gf-src', root).value });
-      toast('Sumber data disimpan.', 'ok');
+      Sync.set('gifterCfg', {
+        source: $('#gf-src', root).value,
+        subtitle: $('#gf-sub', root).value.trim()
+      });
+      toast('Pengaturan disimpan.', 'ok');
     });
 
     $('#gf-reset', root).addEventListener('click', async () => {

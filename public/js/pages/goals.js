@@ -1,4 +1,4 @@
-import { $, on, disposer } from '../lib/dom.js';
+import { $, esc, on, disposer } from '../lib/dom.js';
 import { icon } from '../lib/icons.js';
 import { Sync, API } from '../lib/sync.js';
 import { OVERLAYS } from '../lib/overlays.js';
@@ -39,6 +39,11 @@ export default {
           '<div class="fgrp"><label class="lbl" for="gl-t-' + g.k + '">Target</label>' +
           '<div class="row nowrap"><div class="field short"><input id="gl-t-' + g.k + '" data-target type="number" inputmode="numeric" min="1" step="1" value="' + all[g.k].target + '"></div>' +
           '<button type="button" class="btn primary" data-save>' + icon('save') + 'Simpan</button></div></div>' +
+          (g.k === 'coin'
+            ? '<div class="fgrp"><label class="lbl" for="gl-l-coin">Tulisan Overlay</label>' +
+              '<div class="field"><input id="gl-l-coin" data-label type="text" maxlength="60" autocomplete="off" placeholder="Target Coin" value="' + esc(all.coin.label || 'Target Coin') + '"></div>' +
+              '<p class="hint">Tulisan di overlay. Kosongkan untuk kembali ke "Target Coin".</p></div>'
+            : '') +
           previewHTML(ov, {
             title: 'Preview Overlay — live saat TikTok terhubung',
             extra:
@@ -65,6 +70,8 @@ export default {
         // Update juga nilai input target kalau berubah dari server
         const inp = $('[data-target]', card);
         if (inp && document.activeElement !== inp) inp.value = all[g.k].target;
+        const labelEl = $('[data-label]', card);
+        if (labelEl && document.activeElement !== labelEl) labelEl.value = all[g.k].label || g.title;
       });
     };
     d(Sync.on('state', (e) => {
@@ -90,9 +97,13 @@ export default {
 
     d(on(root, 'click', '[data-goal] [data-save]', (e, btn) => {
       const k = keyOf(btn);
-      const target = Math.round(Number($('[data-target]', btn.closest('[data-goal]')).value));
+      const card = btn.closest('[data-goal]');
+      const target = Math.round(Number($('[data-target]', card).value));
       if (!(target >= 1)) return toast('Target minimal 1.', 'err');
-      update(k, { target });
+      const patch = { target };
+      const labelEl = $('[data-label]', card);
+      if (labelEl) patch.label = labelEl.value.trim();
+      update(k, patch);
       toast('Target disimpan.', 'ok', 2200);
     }));
     d(on(root, 'click', '[data-goal] [data-reset]', (e, btn) => {

@@ -166,21 +166,24 @@ ADMIN_TOKEN=token_panjang_dari_langkah_4
 ## 7. Generate key dari Termux
 
 ```bash
-node tools/license.js gen --days 30 --note "Key Buat Andi"
+node tools/license.js gen --days 30 --username "nobita_1940"
 ```
 
 Atau lewat npm script:
 
 ```bash
-npm run license:gen -- --days 30 --note "Key Buat Andi"
+npm run license:gen -- --days 30 --username "nobita_1940"
 ```
+
+`--note "..."` masih didukung sebagai alias lama dari `--username`.
 
 Contoh output:
 
 ```
   KEY BARU:  JEKK-7QX4-9K2M-4P8T-6R2W
-  Berlaku : 30 hari, sampai 2026-12-21
-  Device  : maksimal 1 PC
+  Berlaku            : 30 hari, sampai 2026-12-21 09:30
+  Device             : maksimal 1 PC
+  Username Tiktok    : nobita_1940
   Kirim key ini ke user. Setelah generate, HP lu boleh mati.
 ```
 
@@ -204,7 +207,7 @@ Yang **ikut**: `electron/license-config.json` (berisi URL server, bukan rahasia)
 ## 9. Operasional sehari-hari
 
 ```bash
-# Lihat semua key
+# Lihat semua key (waktu generate + waktu expired + username TikTok)
 node tools/license.js list
 
 # Cek detail 1 key + device yang terikat

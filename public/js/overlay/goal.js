@@ -27,6 +27,7 @@ export default function mount(ctx) {
     '<div class="gol-f"><span id="g-pct">0%</span><span id="g-note"></span></div></div>';
 
   const box = root.querySelector('#gol');
+  const titleEl = root.querySelector('.gol-t');
   const num = root.querySelector('#g-n');
   const pctEl = root.querySelector('#g-pct');
   const note = root.querySelector('#g-note');
@@ -40,13 +41,18 @@ export default function mount(ctx) {
 
   const read = () => {
     const g = (Sync.get('goals', {}) || {})[arg] || {};
-    return { target: Math.max(1, Number(g.target) || DEF[arg]), current: Math.max(0, Number(g.current) || 0) };
+    return {
+      target: Math.max(1, Number(g.target) || DEF[arg]),
+      current: Math.max(0, Number(g.current) || 0),
+      label: g.label || meta[0]
+    };
   };
 
   let shown = 0;
   let raf = 0;
   const paint = (animate) => {
-    const { target, current } = read();
+    const { target, current, label } = read();
+    if (titleEl && titleEl.textContent !== label) titleEl.textContent = label;
     const from = shown;
     const t0 = performance.now();
     cancelAnimationFrame(raf);
