@@ -278,6 +278,22 @@ code { font: 600 13px var(--f-ui); color: var(--cyan); background: rgba(41, 243,
 /* "Sedang Diputar" panel — info tanpa iframe */
 .mu-player-panel > .fh { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
 .mu-player-acts { display: flex; gap: 8px; flex: none; flex-wrap: wrap; }
+/* Kontrol Pause + Volume Music */
+.mu-vol-row {
+  display: flex; align-items: center; gap: 14px;
+  margin: 14px 0 12px; padding: 10px 14px;
+  border: 1px solid var(--line-2);
+  background: linear-gradient(90deg, rgba(41, 243, 255, .04), rgba(255, 45, 143, .04));
+}
+.mu-vol-label { display: inline-flex; align-items: center; gap: 8px; flex: none; color: var(--txt-2); }
+.mu-vol-label svg { width: 16px; height: 16px; color: var(--cyan); }
+.mu-vol-label b { font: 600 12px var(--f-ui); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.mu-vol-row output { min-width: 44px; text-align: right; font: 700 12px var(--f-display); color: var(--cyan); }
+.mu-player-acts #mu-btn-pause.on { border-color: var(--mag); color: var(--mag); background: rgba(255, 45, 143, .08); }
+@media (max-width: 640px) {
+  .mu-vol-row { flex-wrap: wrap; gap: 8px 12px; }
+  .mu-vol-row input[type="range"] { flex-basis: 100%; order: 3; }
+}
 .mu-now {
   position: relative;
   width: 100%;

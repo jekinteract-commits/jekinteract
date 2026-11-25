@@ -1159,6 +1159,20 @@ async function api(req, res, pathname, q) {
     return json(res, result.ok ? 200 : 400, result);
   }
 
+  // Jeda/lanjutkan + volume. Berlaku untuk semua player yang terhubung (WS musicstate).
+  if (pathname === '/api/music/control' && m === 'POST') {
+    const body = await readJSON(req);
+    if (typeof body.paused === 'boolean') musicPaused = body.paused;
+    if (body.volume !== undefined && body.volume !== null) {
+      musicVolume = clamp(Math.round(Number(body.volume) || 0), 0, 100);
+      if (!state.music || typeof state.music !== 'object') state.music = {};
+      state.music.volume = musicVolume;
+      saveState();
+    }
+    broadcastMusicState();
+    return json(res, 200, { ok: true, paused: musicPaused, volume: musicVolume });
+  }
+
   if (pathname === '/api/music/revoke' && m === 'POST') {
     const body = await readJSON(req);
     const title = body.title ? String(body.title).trim() : null;
@@ -1204,6 +1218,7 @@ async function api(req, res, pathname, q) {
     musicQueue.length = 0;
     musicNowPlaying = null;
     musicElapsed = 0;
+    musicPaused = false;
     musicTickStop();
     broadcastMusicState();
     return json(res, 200, { ok: true });
@@ -2789,6 +2804,8 @@ function obsConnect(ip, port, password) {
 const musicQueue = [];
 let musicNowPlaying = null; // { uid, user, title, ytId, dur, addedAt, startedAt }
 let musicElapsed = 0;
+let musicPaused = false;
+let musicVolume = 100; // 0-100, dipakai semua player YouTube (dashboard + overlay)
 let musicSeqId = 0;
 let musicTickTimer = null;
 
@@ -2803,10 +2820,22 @@ function getMusicCfg() {
   };
 }
 
+/** Volume default diambil dari state.music.volume bila tersedia. */
+(function initMusicVolume() {
+  const v = (state.music && state.music.volume);
+  if (typeof v === 'number') {
+    musicVolume = clamp(Math.round(v), 0, 100);
+  } else if (typeof v === 'string' && v.trim() !== '') {
+    musicVolume = clamp(Math.round(Number(v) || 0), 0, 100);
+  }
+})();
+
 function musicStatePayload() {
   return {
     nowPlaying: musicNowPlaying,
     elapsed:    musicElapsed,
+    paused:     musicPaused,
+    volume:     musicVolume,
     queue:      musicQueue.slice()
   };
 }
@@ -2820,6 +2849,9 @@ function musicTickStart() {
   if (musicTickTimer) return;
   musicTickTimer = setInterval(() => {
     if (!musicNowPlaying) { musicTickStop(); return; }
+    // Jeda: elapsed dibekukan supaya tidak auto-skip saat lagu dipause.
+    // Status pause sudah disiarkan sekali oleh /api/music/control.
+    if (musicPaused) return;
     musicElapsed += 1;
     // Jika durasi diketahui dan sudah habis, skip otomatis
     if (musicNowPlaying.dur > 0 && musicElapsed >= musicNowPlaying.dur) {
@@ -2844,6 +2876,7 @@ function musicPlayNext() {
   const item = musicQueue.shift();
   musicNowPlaying = Object.assign({}, item, { startedAt: Date.now() });
   musicElapsed = 0;
+  musicPaused = false; // lagu baru selalu mulai diputar (tidak ikut status jeda sebelumnya)
   broadcastMusicState();
   musicTickStart();
   console.log('[music] sekarang memutar: "' + item.title + '" req @' + item.user);

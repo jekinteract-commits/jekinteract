@@ -7,6 +7,7 @@
  * - AudioContext dummy digunakan agar browser tidak suspend tab saat berpindah.
  */
 import { SONGS } from '../lib/demo.js';
+import { esc } from '../lib/dom.js';
 import { fmtMMSS } from '../lib/format.js';
 import { icon } from '../lib/icons.js';
 import { Sync, API } from '../lib/sync.js';
@@ -123,6 +124,7 @@ export default function mount(ctx) {
     '<div class="mus-req">' + icon('mic') + '<span>Request oleh</span><b id="m-user"></b></div>' +
     '<div class="mus-title"><span id="m-title"></span></div>' +
     '<div class="mus-prog"><div class="mus-bar"><i id="m-fill"></i></div><span id="m-time"></span></div>' +
+    '<div class="mus-next" id="m-next"></div>' +
     '</div>' +
     '<div class="mus-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>' +
     '</div>';
@@ -161,6 +163,30 @@ export default function mount(ctx) {
       : fmtMMSS(elapsed);
   };
 
+  /** Tampilkan antrean lagu yang akan diputar berikutnya (maks. 2 + sisa). */
+  const paintQueue = (list) => {
+    const el = $('#m-next');
+    if (!el) return;
+    const items = (list || []).slice();
+    if (!items.length) {
+      el.innerHTML = '';
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+    const more = items.length > 2
+      ? '<span class="mus-next-more">+' + (items.length - 2) + ' lagi</span>'
+      : '';
+    const rows = items.slice(0, 2).map((s, i) =>
+      '<div class="mus-next-i">' +
+      '<span class="mus-next-n">' + (i + 1) + '</span>' +
+      '<span class="mus-next-t">' + esc(s.title) + '</span>' +
+      '<span class="mus-next-u">@' + esc(s.user) + '</span>' +
+      '</div>'
+    ).join('');
+    el.innerHTML = '<div class="mus-next-h"><b>Berikutnya</b>' + more + '</div>' + rows;
+  };
+
   /* ---- YouTube player instance ---- */
   let ytPlayer = null;
   let currentYtId = '';
@@ -169,12 +195,44 @@ export default function mount(ctx) {
   let localElapsed = 0;
   let localDur = 0;
   let localTick = null;
+  let musicPaused = false; // dari server (kontrol Pause Music)
+  let musicVolume = 100;   // dari server (kontrol Volume Music)
+
+  /** Terapkan pause + volume dari musicstate ke player overlay (bukan preview). */
+  const applyControl = (ms) => {
+    if (ms) {
+      const wasPaused = musicPaused;
+      musicPaused = !!ms.paused;
+      if (typeof ms.volume === 'number') musicVolume = ms.volume;
+      if (isPreview || !ytPlayer) return;
+      try {
+        if (typeof ytPlayer.setVolume === 'function') ytPlayer.setVolume(musicVolume);
+        if (musicPaused) {
+          if (ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+          stopTick();
+        } else if (wasPaused && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === 2) {
+          // Baru saja di-resume dari kontrol Pause Music.
+          if (ytPlayer.playVideo) ytPlayer.playVideo();
+          startTick();
+        }
+      } catch (_) {}
+      return;
+    }
+    if (isPreview || !ytPlayer) return;
+    // Dipanggil setelah player ready / video di-load: pakai nilai terkini.
+    try {
+      if (typeof ytPlayer.setVolume === 'function') ytPlayer.setVolume(musicVolume);
+      if (musicPaused && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+    } catch (_) {}
+  };
 
   const stopTick = () => {
     if (localTick) { clearInterval(localTick); localTick = null; }
   };
 
   const startTick = () => {
+    // Jangan jalankan progress timer saat lagu sedang dijeda.
+    if (musicPaused) return;
     stopTick();
     localTick = setInterval(() => {
       // Sinkronkan elapsed dari player YouTube langsung jika tersedia
@@ -214,7 +272,11 @@ export default function mount(ctx) {
     if (isPreview) return; // preview: hanya thumbnail, tidak ada audio
 
     const onPlayerReady = (player) => {
+      if (typeof player.setVolume === 'function') {
+        try { player.setVolume(musicVolume); } catch (_) {}
+      }
       try { player.playVideo(); } catch (_) {}
+      applyControl(null);
     };
 
     const onStateChange = (e, player) => {
@@ -238,6 +300,7 @@ export default function mount(ctx) {
             }
           }
         } catch (_) {}
+        applyControl(null);
         startTick();
       }
       // YT.PlayerState.ENDED = 0
@@ -277,12 +340,18 @@ export default function mount(ctx) {
         ytPlayer.loadVideoById(ytId);
       } catch (_) {}
     }
+    // Video baru ikut status jeda/volume terkini dari server.
+    applyControl(null);
   };
 
   /* ---- Mode live ---- */
   let liveMode = false;
 
   const applyMusicState = (ms) => {
+    // Pause/volume dari server berlaku sebelum logika lagu dijalankan.
+    applyControl(ms);
+    // Antrean berikutnya ikut ditampilkan di overlay (juga di preview dashboard).
+    paintQueue(ms && ms.queue);
     if (!ms || !ms.nowPlaying) {
       paintTitle('—', 'Menunggu request...');
       paintProgress(0, 0);
@@ -366,6 +435,10 @@ export default function mount(ctx) {
   let demoTimer = null;
 
   const demoSong = () => SONGS[demoIdx % SONGS.length];
+  const demoQueue = () => [
+    SONGS[(demoIdx + 1) % SONGS.length],
+    SONGS[(demoIdx + 2) % SONGS.length]
+  ];
 
   const startDemo = () => {
     stopTick();
@@ -377,6 +450,7 @@ export default function mount(ctx) {
 
     paintTitle(demoSong().user, demoSong().title);
     paintProgress(demoElapsed, demoSong().dur);
+    paintQueue(demoQueue());
 
     demoTimer = setInterval(() => {
       if (liveMode) { clearInterval(demoTimer); demoTimer = null; return; }
@@ -385,6 +459,7 @@ export default function mount(ctx) {
         demoIdx++;
         demoElapsed = 0;
         paintTitle(demoSong().user, demoSong().title);
+        paintQueue(demoQueue());
       }
       paintProgress(demoElapsed, demoSong().dur);
     }, 250);

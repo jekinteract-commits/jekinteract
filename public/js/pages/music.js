@@ -5,7 +5,7 @@ import { OVERLAYS } from '../lib/overlays.js';
 import { WHO_FULL, SONGS } from '../lib/demo.js';
 import { avatar } from '../lib/avatar.js';
 import { fmtMMSS } from '../lib/format.js';
-import { toast, linkRowHTML, statusHTML, bindStatuses } from '../lib/ui.js';
+import { toast, linkRowHTML, statusHTML, bindStatuses, bindRanges } from '../lib/ui.js';
 import { Sync, API } from '../lib/sync.js';
 
 const CMDS = [
@@ -27,6 +27,7 @@ export default {
   render() {
     const ov = OVERLAYS.music;
     const cfg = Object.assign({}, DEFAULTS.music, Store.get('music', {}));
+    const initVol = Math.max(0, Math.min(100, Number(cfg.volume == null ? 100 : cfg.volume) || 0));
     return (
       '<div class="ph"><h1>YouTube Music</h1><p>Penonton request lagu lewat komentar. Lagu diputar langsung dari <b>overlay</b> (iframe YouTube ada di overlay, bukan di sini). Buka overlay di OBS atau tab terpisah agar suara keluar.</p></div>' +
       '<div class="stack">' +
@@ -35,9 +36,15 @@ export default {
       '<section class="panel mu-player-panel">' +
       '<div class="fh"><div class="fh-t"><h2>Sedang Diputar</h2><div class="sub">Lagu diputar dari iframe di overlay. Suara keluar dari browser yang membuka overlay.</div></div>' +
       '<div class="mu-player-acts">' +
+      '<button type="button" class="btn sm secondary" id="mu-btn-pause">' + icon('pause') + '<span id="mu-pause-label">Pause</span></button>' +
       '<button type="button" class="btn sm" id="mu-btn-skip">' + icon('skip') + 'Skip</button>' +
       '<button type="button" class="btn sm secondary" id="mu-btn-clear">' + icon('trash') + 'Kosongkan</button>' +
       '</div></div>' +
+      '<div class="mu-vol-row rng">' +
+      '<span class="mu-vol-label">' + icon('volume') + '<b>Volume Music</b></span>' +
+      '<input type="range" id="mu-vol" min="0" max="100" step="1" value="' + initVol + '" aria-label="Volume music">' +
+      '<output for="mu-vol">' + initVol + '%</output>' +
+      '</div>' +
       '<div class="mu-now" id="mu-now">' +
       '<div class="mu-now-empty" id="mu-player-empty"><span>' + icon('music') + '</span><p>Belum ada lagu. Tunggu request dari penonton atau tambah manual di bawah.</p></div>' +
       '</div>' +
@@ -96,6 +103,63 @@ export default {
     const d = disposer();
     const ov = OVERLAYS.music;
     d(bindStatuses(root));
+    d(bindRanges(root));
+
+    /* ---- Kontrol Pause + Volume Music ---- */
+    const volInput  = $('#mu-vol', root);
+    const volOut    = volInput && volInput.closest('.rng').querySelector('output');
+    const pauseBtn  = $('#mu-btn-pause', root);
+    const pauseLbl  = $('#mu-pause-label', root);
+    let lastPaused = false;
+    let volTimer = null;
+
+    const paintVolume = (v) => {
+      const val = Math.max(0, Math.min(100, Number(v) || 0));
+      if (!volInput) return;
+      volInput.value = val;
+      volInput.style.setProperty('--p', val + '%');
+      if (volOut) volOut.textContent = val + '%';
+    };
+
+    const paintPaused = (v) => {
+      lastPaused = !!v;
+      if (!pauseBtn) return;
+      pauseBtn.classList.toggle('on', lastPaused);
+      if (pauseLbl) pauseLbl.textContent = lastPaused ? 'Play' : 'Pause';
+      const ico = pauseBtn.querySelector('svg');
+      if (ico) ico.outerHTML = icon(lastPaused ? 'play' : 'pause');
+    };
+
+    d(() => clearTimeout(volTimer));
+    if (volInput) {
+      volInput.addEventListener('input', () => {
+        if (volOut) volOut.textContent = volInput.value + '%';
+        clearTimeout(volTimer);
+        volTimer = setTimeout(async () => {
+          const volume = Number(volInput.value);
+          try {
+            await API.musicControl({ volume });
+            const cfg = Object.assign({}, Store.get('music', {}), { volume });
+            Store.set('music', cfg);
+          } catch (e) {
+            toast(e.message || 'Gagal mengubah volume.', 'err');
+          }
+        }, 180);
+      });
+    }
+    if (pauseBtn) {
+      pauseBtn.addEventListener('click', async () => {
+        if (!isTikTokConnected) { toast('TikTok belum terhubung.', 'warn', 2000); return; }
+        const next = !lastPaused;
+        try {
+          await API.musicControl({ paused: next });
+          paintPaused(next);
+          toast(next ? 'Musik dijeda.' : 'Musik dilanjutkan.', 'ok', 1800);
+        } catch (e) {
+          toast(e.message || 'Gagal mengubah status musik.', 'err');
+        }
+      });
+    }
 
     /* ---- Embed #mu-float ke slot preview di halaman ini ---- */
     const floatEl = document.getElementById('mu-float');
@@ -122,7 +186,8 @@ export default {
         playOn:  $('#mu-play',    root).checked,
         skipOn:  $('#mu-skip',    root).checked,
         playWho: $('#mu-playwho', root).value,
-        skipWho: $('#mu-skipwho', root).value
+        skipWho: $('#mu-skipwho', root).value,
+        volume:  volInput ? Number(volInput.value) : 100
       };
       Store.set('music', cfg);
       // Simpan ke server agar handler TikTok chat tahu konfigurasi terkini
@@ -168,7 +233,7 @@ export default {
           '<span class="q-n">▶</span>' +
           avatar(now.user, 38) +
           '<div class="q-m"><b>@' + esc(now.user) + '</b><span>' + esc(now.title) + '</span></div>' +
-          '<span class="chip c-aud">Sedang diputar</span>' +
+          '<span class="chip c-aud">' + (ms.paused ? 'Dijeda' : 'Sedang diputar') + '</span>' +
           '<span class="q-d">' + esc(durText) + '</span>' +
           '</li>'
         );
@@ -223,7 +288,7 @@ export default {
       let info = nowEl && nowEl.querySelector('.mu-now-info');
       const elapsed = ms.elapsed || 0;
       const durText = now.dur > 0 ? fmtMMSS(elapsed) + ' / ' + fmtMMSS(now.dur) : fmtMMSS(elapsed);
-      const statusText = now.ytId ? 'Memutar' : 'Mencari di YouTube...';
+      const statusText = ms && ms.paused ? 'Dijeda' : (now.ytId ? 'Memutar' : 'Mencari di YouTube...');
       const ytLink = now.ytId ? 'https://www.youtube.com/watch?v=' + now.ytId : '';
       const html =
         '<div class="mu-now-info">' +
@@ -251,6 +316,14 @@ export default {
     const onMusicState = (ms) => {
       paintQueue(ms);
       paintNowPlaying(ms);
+      if (ms) {
+        paintPaused(ms.paused);
+        // Jangan timpa slider saat user sedang menarik knob (server masih
+        // mengirim nilai lama sampai debounce 180ms selesai).
+        if (typeof ms.volume === 'number' && document.activeElement !== volInput) {
+          paintVolume(ms.volume);
+        }
+      }
       const now = ms && ms.nowPlaying;
       if (now) {
         currentUid = now.uid;

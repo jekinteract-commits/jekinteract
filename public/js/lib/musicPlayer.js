@@ -99,6 +99,30 @@ function ensureYtApi(cb) {
 let ytPlayer = null;       // instance YT.Player
 let currentUid = '';       // uid lagu yang sedang di-load
 let currentYtId = '';      // ytId yang sedang di-load
+let musicPaused = false;   // status jeda dari server
+let musicVolume = 100;     // volume dari server (0-100)
+
+/**
+ * Terapkan pause + volume ke instance player. Dipanggil tiap kali musicstate
+ * datang dan juga saat player siap / baru mulai play, supaya control tetap
+ * berlaku walau player dibuat atau di-load ulang setelah perubahan.
+ */
+function applyControl(ms) {
+  if (ms) {
+    musicPaused = !!ms.paused;
+    if (typeof ms.volume === 'number') musicVolume = ms.volume;
+  }
+  if (!ytPlayer) return;
+  try {
+    if (typeof ytPlayer.setVolume === 'function') ytPlayer.setVolume(musicVolume);
+    if (musicPaused) {
+      if (ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+    } else if (ytPlayer.playVideo && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === 2) {
+      // Hanya resume bila lagu memang tidak dijeda oleh user.
+      ytPlayer.playVideo();
+    }
+  } catch (_) {}
+}
 
 function loadVideo(ytId, song) {
   if (!ytId) return;
@@ -121,7 +145,13 @@ function loadVideo(ytId, song) {
           fs: 0
         },
         events: {
-          onReady: (e) => { try { e.target.playVideo(); } catch (_) {} },
+          onReady: (e) => {
+            if (typeof e.target.setVolume === 'function') {
+              try { e.target.setVolume(musicVolume); } catch (_) {}
+            }
+            try { e.target.playVideo(); } catch (_) {}
+            applyControl(null);
+          },
           onStateChange: onPlayerStateChange
         }
       });
@@ -145,6 +175,8 @@ function onPlayerStateChange(e) {
         }
       }
     } catch (_) {}
+    // Pastikan volume/pause tetap terpakai setelah load ulang / autoplay.
+    applyControl(null);
   }
   // ENDED = 0
   if (e.data === 0) {
@@ -153,14 +185,15 @@ function onPlayerStateChange(e) {
       API.musicSkip('yt-ended').catch(() => {});
     }
   }
-  // PAUSED = 2 — bisa terjadi karena throttle; resume paksa
-  if (e.data === 2) {
+  // PAUSED = 2 — bisa terjadi karena throttle; resume paksa HANYA bila
+  // user tidak sedang menjeda lewat kontrol Pause Music.
+  if (e.data === 2 && !musicPaused) {
     const np = Sync.music && Sync.music.nowPlaying;
     if (np && np.uid === currentUid) {
       // Coba resume setelah 800ms (bukan langsung agar tidak loop)
       setTimeout(() => {
         try {
-          if (ytPlayer && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === 2) {
+          if (!musicPaused && ytPlayer && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === 2) {
             ytPlayer.playVideo();
           }
         } catch (_) {}
@@ -173,6 +206,8 @@ function onPlayerStateChange(e) {
 /* Reaksi terhadap musicstate                                          */
 /* ------------------------------------------------------------------ */
 function onMusicState(ms) {
+  // Pause + volume berlaku untuk semua kondisi (lagu sama, lagu baru, atau stop).
+  applyControl(ms);
   const now = ms && ms.nowPlaying;
 
   if (!now) {
@@ -189,12 +224,14 @@ function onMusicState(ms) {
       currentYtId = now.ytId;
       loadVideo(now.ytId, now);
     }
-    // Jika video pause karena throttle, resume
-    try {
-      if (ytPlayer && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === 2) {
-        ytPlayer.playVideo();
-      }
-    } catch (_) {}
+    // Jika video pause karena throttle, resume — kecuali user memang menjeda.
+    if (!musicPaused) {
+      try {
+        if (ytPlayer && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === 2) {
+          ytPlayer.playVideo();
+        }
+      } catch (_) {}
+    }
     return;
   }
 

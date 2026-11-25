@@ -18,7 +18,7 @@ export const Sync = {
   likeLeaderboard: [], // [{id, nickname, avatarUrl, count}] realtime dari server
   giftLeaderboard: [], // [{id, nickname, avatarUrl, count}] realtime dari server
   liveStats: { current: null, sessions: [] }, // statistik sesi live asli dari server
-  music: { nowPlaying: null, elapsed: 0, queue: [] }, // state musik realtime
+  music: { nowPlaying: null, elapsed: 0, paused: false, volume: 100, queue: [] }, // state musik realtime
   online: false,
   _hello: null, // data hello terakhir, untuk re-emit setelah mount()
 
@@ -362,6 +362,12 @@ export const API = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ by: by || 'dashboard' })
+  }),
+  /** Set jeda (pause/resume) dan/atau volume (0-100) untuk semua player musik. */
+  musicControl: (payload) => json('/api/music/control', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {})
   }),
   musicRevoke: (user, title) => json('/api/music/revoke', {
     method: 'POST',
