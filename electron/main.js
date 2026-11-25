@@ -582,28 +582,8 @@ function injectTunnelUrl(url) {
   mainWindow.webContents.send('tunnel-url', tunnelUrl);
 }
 
-// ── Status halaman loading ────────────────────────────────────────────────────
-let loadingReady = false;
-let loadingPageActive = false;
-let lastLoadingStatus = { text: 'Harap tunggu, sedang memproses JekInteract…', pct: 8 };
-
-function setLoadingStatus(text, pct) {
-  lastLoadingStatus = { text, pct };
-  if (!loadingPageActive || !loadingReady) return;
-  try {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('loading-status', lastLoadingStatus);
-    }
-  } catch (_) {}
-}
-
 // ── Buat window utama ─────────────────────────────────────────────────────────
 function createWindow(port) {
-  // Tanpa port → tampilkan halaman loading lokal lebih dulu.
-  // Dengan port → langsung muat dashboard (dipakai tray / second-instance).
-  loadingReady = false;
-  loadingPageActive = !port;
-
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -611,8 +591,8 @@ function createWindow(port) {
     minHeight: 600,
     title: 'JekInteract',
     icon: appIcon(),
-    backgroundColor: '#07050f',
-    show: true,
+    backgroundColor: '#0f172a',
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -623,18 +603,23 @@ function createWindow(port) {
     }
   });
 
-  if (port) {
-    mainWindow.loadURL('http://127.0.0.1:' + port);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, 'loading.html'));
-  }
+  mainWindow.loadURL('http://127.0.0.1:' + port);
+
+  mainWindow.once('ready-to-show', () => {
+    if (!mainWindow.isVisible()) mainWindow.show();
+    if (tunnelUrl) injectTunnelUrl(tunnelUrl);
+  });
+
+  // Fallback: paksa tampil setelah 3 detik jika ready-to-show tidak fire
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.log('[electron] fallback show window');
+      mainWindow.show();
+    }
+  }, 3000);
 
   mainWindow.webContents.on('did-finish-load', () => {
     log('[electron] window selesai load (did-finish-load)');
-    if (loadingPageActive) {
-      loadingReady = true;
-      setLoadingStatus(lastLoadingStatus.text, lastLoadingStatus.pct);
-    }
     if (tunnelUrl) injectTunnelUrl(tunnelUrl);
   });
 
@@ -655,32 +640,15 @@ function createWindow(port) {
   });
 
   mainWindow.webContents.on('will-navigate', (e, url) => {
-    if (url.startsWith('http://127.0.0.1:' + serverPort) || url.startsWith('http://localhost:' + serverPort)) return;
+    if (url.startsWith('http://127.0.0.1:' + port) || url.startsWith('http://localhost:' + port)) return;
     e.preventDefault();
     shell.openExternal(url);
   });
 
   mainWindow.on('closed', () => {
     unregisterWinloseHotkeys();
-    loadingReady = false;
-    loadingPageActive = false;
     mainWindow = null;
   });
-}
-
-/** Ganti isi jendela yang sudah ada dari loading ke dashboard (tanpa bikin window baru). */
-function showDashboard(port) {
-  serverPort = port;
-  loadingPageActive = false;
-  loadingReady = false;
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    createWindow(port);
-    return;
-  }
-  mainWindow.loadURL('http://127.0.0.1:' + port);
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
 }
 
 // ── Tray icon ─────────────────────────────────────────────────────────────────
@@ -762,8 +730,6 @@ function showLicenseWindow(status) {
     licenseWindow.focus();
     return;
   }
-  // Jendela loading disembunyikan, bukan ditutup, supaya bisa dipakai lagi
-  // begitu lisensi berhasil diaktifkan.
   if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) mainWindow.hide();
   licenseWindow = new BrowserWindow({
     width: 560,
@@ -800,15 +766,13 @@ async function startProtectedApp() {
   if (appStarted || appQuitting) return;
   appStarted = true;
   try {
-    setLoadingStatus('Menyiapkan server JekInteract…', 55);
     if (licenseWindow && !licenseWindow.isDestroyed()) licenseWindow.close();
 
     const port = await startServer();
-    setLoadingStatus('Siap — membuka menu utama…', 92);
-    showDashboard(port);
+    createWindow(port);
     createTray(port);
 
-    // Tunnel tidak menahan jendela: loading sudah hilang begitu dashboard siap.
+    // Tunnel tidak menahan jendela: dashboard sudah tampil.
     log('[electron] menunggu tunnel Cloudflare (background)...');
     waitForTunnel(port).then((url) => {
       if (url) {
@@ -819,7 +783,6 @@ async function startProtectedApp() {
     });
   } catch (e) {
     log('[electron] gagal start: ' + (e && e.stack ? e.stack : e));
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
     dialog.showErrorBox('JekInteract - Gagal Start',
       'Server tidak bisa dijalankan:\n\n' + (e && e.message ? e.message : e) + '\n\n' +
       'Log lengkap:\n' + (LOG_FILES.length ? LOG_FILES.join('\n') : '(tidak tersedia)'));
@@ -886,13 +849,6 @@ app.whenReady().then(async () => {
       ' portableDir=' + (process.env.PORTABLE_EXECUTABLE_DIR || '-'));
   log('[electron] file log: ' + (LOG_FILES.length ? LOG_FILES.join(' | ') : '(tidak ada yang bisa ditulis)'));
 
-  // Jendela (dan tombol di taskbar Windows) langsung muncul SEBELUM cek lisensi.
-  // Mode install driver tidak butuh jendela — dia langsung restart / minta UAC.
-  if (!process.argv.includes(INTERCEPTION_SETUP_ARG)) {
-    createWindow();
-    log('[electron] jendela loading ditampilkan');
-  }
-
   // Shortcut keluar global — berguna saat window disembunyikan di tray dan
   // pengguna ingin menghapus/mengganti file .exe (file sedang dikunci proses).
   try {
@@ -911,31 +867,30 @@ app.whenReady().then(async () => {
     // Setup gagal tidak boleh menghalangi aplikasi berjalan (fallback keystroke lama).
   }
 
-  // ── Gate lisensi: server tetap baru jalan setelah lisensi valid ──────────
-  // Cek lisensi dijalankan di background; jendela sudah keburu kelihatan.
-  setLoadingStatus('Memeriksa lisensi…', 28);
-  Promise.resolve()
-    .then(() => license.verify())
-    .then((status) => {
-      if (appQuitting) return;
-      if (status && status.ok) return startProtectedApp();
-      showLicenseWindow(status);
-    })
-    .catch((e) => {
-      log('[license] error saat verifikasi: ' + (e && e.stack ? e.stack : e));
-      if (!appQuitting) {
-        showLicenseWindow({
-          ok: false, reason: 'LICENSE_ERROR',
-          message: 'Gagal mengecek lisensi: ' + (e && e.message ? e.message : String(e))
-        });
-      }
-    });
+  // ── Gate lisensi: jangan jalankan server sebelum key tervalidasi ──────────
+  let status;
+  try {
+    status = await license.verify();
+  } catch (e) {
+    log('[license] error saat verifikasi: ' + (e && e.stack ? e.stack : e));
+    status = {
+      ok: false, reason: 'LICENSE_ERROR',
+      message: 'Gagal mengecek lisensi: ' + (e && e.message ? e.message : String(e))
+    };
+  }
+
+  if (appQuitting) return;
+  if (status.ok) {
+    await startProtectedApp();
+  } else {
+    showLicenseWindow(status);
+  }
 });
 
 app.on('window-all-closed', () => {
-  // Tetap jalan di tray kalau app sudah aktif. Kalau yang ditutup jendela
-  // Auth Key sebelum aktivasi → jangan biarkan proses hidup tanpa server.
-  if (!appStarted && !licenseWindow) shutdownAndQuit();
+  // Tutup aplikasi sepenuhnya saat jendela ditutup, supaya tidak ada proses
+  // yang tertinggal di background dan user tidak perlu end task manual.
+  shutdownAndQuit();
 });
 
 app.on('activate', () => {

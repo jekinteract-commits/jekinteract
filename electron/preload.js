@@ -35,16 +35,6 @@ contextBridge.exposeInMainWorld('__electronBridge__', {
   },
 
   /**
-   * Update teks/progress halaman loading saat aplikasi masih menyiapkan diri.
-   * fn({ text: string, pct: number }) → dipanggil tiap kali status berubah.
-   */
-  onLoadingStatus(fn) {
-    const handler = (_event, status) => fn(status);
-    ipcRenderer.on('loading-status', handler);
-    return () => ipcRenderer.removeListener('loading-status', handler);
-  },
-
-  /**
    * Aktifkan/nonaktifkan hotkey global Numpad Add/Subtract (Win/Lose).
    * Hotkey global tetap diterima walau window JekInteract tidak fokus.
    * Mengembalikan Promise<{ ok, enabled, error? }>.

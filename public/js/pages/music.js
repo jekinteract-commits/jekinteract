@@ -395,13 +395,29 @@ export default {
     /* ---- Clear button ---- */
     $('#mu-btn-clear', root).addEventListener('click', async () => {
       if (!isTikTokConnected) { toast('TikTok belum terhubung.', 'warn', 2000); return; }
-      if (!confirm('Kosongkan seluruh antrian dan hentikan musik?')) return;
+      const addTitle = $('#mu-add-title', root);
+      const addUser  = $('#mu-add-user',  root);
+      const restoreFocus = () => {
+        setTimeout(() => {
+          try { window.focus(); } catch (_) {}
+          [addTitle, addUser].forEach((el) => { if (el) { el.disabled = false; el.readOnly = false; } });
+          const ae = document.activeElement;
+          const tag = ae && ae.tagName ? ae.tagName.toLowerCase() : '';
+          if (!ae || ae === document.body || tag === 'iframe') {
+            try { document.body.focus(); } catch (_) {}
+            if (addTitle) addTitle.focus();
+          }
+        }, 150);
+      };
+      if (!confirm('Kosongkan seluruh antrian dan hentikan musik?')) { restoreFocus(); return; }
       try {
         await API.musicClear();
         currentUid = null;
         toast('Antrian dikosongkan.', 'ok', 2000);
       } catch (e) {
         toast(e.message || 'Gagal mengosongkan.', 'err');
+      } finally {
+        restoreFocus();
       }
     });
 

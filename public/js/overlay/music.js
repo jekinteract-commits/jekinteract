@@ -189,6 +189,8 @@ export default function mount(ctx) {
 
   /* ---- YouTube player instance ---- */
   let ytPlayer = null;
+  let ytPlayerReady = false;
+  let pendingYtId = '';
   let currentYtId = '';
   let currentUid = '';
   let currentSong = null; // referensi ke song yang sedang diputar
@@ -197,32 +199,44 @@ export default function mount(ctx) {
   let localTick = null;
   let musicPaused = false; // dari server (kontrol Pause Music)
   let musicVolume = 100;   // dari server (kontrol Volume Music)
+  let resumeTimer = null;
+
+  function clearResumeTimer() {
+    if (resumeTimer) { clearTimeout(resumeTimer); resumeTimer = null; }
+  }
+
+  function ensurePlaying() {
+    if (isPreview || musicPaused || !ytPlayer || !ytPlayerReady) return;
+    const np = Sync.music && Sync.music.nowPlaying;
+    if (!np || np.uid !== currentUid) return;
+    try {
+      const st = ytPlayer.getPlayerState ? ytPlayer.getPlayerState() : -2;
+      if (st === 1 || st === 3 || st === 0) return;
+      if (ytPlayer.playVideo) ytPlayer.playVideo();
+    } catch (_) {}
+  }
 
   /** Terapkan pause + volume dari musicstate ke player overlay (bukan preview). */
   const applyControl = (ms) => {
     if (ms) {
-      const wasPaused = musicPaused;
       musicPaused = !!ms.paused;
       if (typeof ms.volume === 'number') musicVolume = ms.volume;
-      if (isPreview || !ytPlayer) return;
-      try {
-        if (typeof ytPlayer.setVolume === 'function') ytPlayer.setVolume(musicVolume);
-        if (musicPaused) {
-          if (ytPlayer.pauseVideo) ytPlayer.pauseVideo();
-          stopTick();
-        } else if (wasPaused && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === 2) {
-          // Baru saja di-resume dari kontrol Pause Music.
-          if (ytPlayer.playVideo) ytPlayer.playVideo();
-          startTick();
-        }
-      } catch (_) {}
-      return;
     }
     if (isPreview || !ytPlayer) return;
-    // Dipanggil setelah player ready / video di-load: pakai nilai terkini.
     try {
       if (typeof ytPlayer.setVolume === 'function') ytPlayer.setVolume(musicVolume);
-      if (musicPaused && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+      if (musicPaused) {
+        clearResumeTimer();
+        if (ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+        stopTick();
+      } else if (ytPlayerReady) {
+        const st = ytPlayer.getPlayerState ? ytPlayer.getPlayerState() : -2;
+        if (st !== 1 && st !== 3 && st !== 0) {
+          if (ytPlayer.playVideo) ytPlayer.playVideo();
+        } else if (st === 1) {
+          startTick();
+        }
+      }
     } catch (_) {}
   };
 
@@ -272,16 +286,24 @@ export default function mount(ctx) {
     if (isPreview) return; // preview: hanya thumbnail, tidak ada audio
 
     const onPlayerReady = (player) => {
+      ytPlayerReady = true;
       if (typeof player.setVolume === 'function') {
         try { player.setVolume(musicVolume); } catch (_) {}
       }
-      try { player.playVideo(); } catch (_) {}
+      if (pendingYtId && pendingYtId !== ytId) {
+        try { player.loadVideoById(pendingYtId); } catch (_) {}
+      } else {
+        try { player.playVideo(); } catch (_) {}
+      }
+      pendingYtId = '';
       applyControl(null);
+      setTimeout(ensurePlaying, 400);
     };
 
     const onStateChange = (e, player) => {
       // YT.PlayerState.PLAYING = 1
       if (e.data === 1) {
+        clearResumeTimer();
         try {
           const dur = Math.round(player.getDuration());
           if (dur > 0 && dur !== localDur) {
@@ -305,18 +327,50 @@ export default function mount(ctx) {
       }
       // YT.PlayerState.ENDED = 0
       if (e.data === 0) {
+        clearResumeTimer();
         stopTick();
         const np = Sync.music && Sync.music.nowPlaying;
         if (np && np.uid === currentUid) API.musicSkip('yt-ended').catch(() => {});
       }
-      // YT.PlayerState.PAUSED = 2
-      if (e.data === 2) {
-        stopTick();
+      // UNSTARTED = -1, CUED = 5, PAUSED = 2
+      if (e.data === -1 || e.data === 2 || e.data === 5) {
+        if (e.data === 2) stopTick();
+        if (!musicPaused) {
+          const np = Sync.music && Sync.music.nowPlaying;
+          if (np && np.uid === currentUid) {
+            clearResumeTimer();
+            let tries = 0;
+            const retry = () => {
+              if (musicPaused) return;
+              const now = Sync.music && Sync.music.nowPlaying;
+              if (!now || now.uid !== currentUid) return;
+              try {
+                const st = player.getPlayerState ? player.getPlayerState() : -2;
+                if (st === 1 || st === 3 || st === 0) return;
+                if (player.playVideo) player.playVideo();
+              } catch (_) {}
+              tries += 1;
+              if (tries < 5) resumeTimer = setTimeout(retry, 1200);
+            };
+            resumeTimer = setTimeout(retry, 500);
+          }
+        }
       }
     };
 
     if (!ytPlayer) {
       ensureYtApi(() => {
+        if (ytPlayer) {
+          if (ytPlayerReady) {
+            try { ytPlayer.loadVideoById(ytId); } catch (_) {}
+            setTimeout(ensurePlaying, 300);
+          } else {
+            pendingYtId = ytId;
+          }
+          return;
+        }
+        ytPlayerReady = false;
+        pendingYtId = '';
         ytPlayer = new window.YT.Player($('#m-yt-player'), {
           height: '100%',
           width: '100%',
@@ -335,10 +389,11 @@ export default function mount(ctx) {
           }
         });
       });
+    } else if (!ytPlayerReady) {
+      pendingYtId = ytId;
     } else {
-      try {
-        ytPlayer.loadVideoById(ytId);
-      } catch (_) {}
+      try { ytPlayer.loadVideoById(ytId); } catch (_) {}
+      setTimeout(ensurePlaying, 300);
     }
     // Video baru ikut status jeda/volume terkini dari server.
     applyControl(null);
