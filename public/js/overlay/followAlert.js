@@ -36,7 +36,8 @@ export default function mount(ctx) {
   let outTimer = null;
 
   function playSound(d) {
-    // Suara diputar dari overlay (Browser Source OBS / preview), bukan dashboard.
+    // Suara diputar dari overlay asli (Browser Source OBS). Preview tidak
+    // menyuarakan supaya tidak dobel dengan pemutar global di dashboard.
     try {
       audio.pause();
       audio.currentTime = 0;
@@ -64,7 +65,7 @@ export default function mount(ctx) {
       img.src = fallback;
     };
     img.src = src || fallback;
-    playSound(d);
+    if (!ctx.preview) playSound(d);
 
     card.classList.remove('show', 'out');
     void card.offsetWidth; // restart animasi untuk tiap item antrian

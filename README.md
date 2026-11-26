@@ -46,6 +46,12 @@ Port lain: `PORT=4000 npm start`.
   Overlay, Tes Alert (tetap jalan walau toggle mati/belum konek), Preview Overlay, dan
   History 100 entri terakhir (Nickname, Username, Follower Baru / Pernah follow) dengan
   tombol hapus history.
+- Suara Join Alert / Follow Alert tetap terdengar dari **halaman dashboard mana pun**
+  (tidak perlu standby di halaman alert). Dashboard memutar suara hanya saat overlay
+  asli/OBS sedang offline; kalau Browser Source OBS terbuka, suara tetap diputar dari
+  overlay itu saja (tidak dobel). Preview overlay juga tidak menyuarakan ulang.
+  Komentar lama yang dikirim ulang TikTok saat Connection tersambung tidak memicu
+  Baca Komentar, musik YouTube (`!play`/`!skip`), Subathon, maupun aktivitas.
 - Semua overlay berlatar transparan. Link overlay ada di tiap halaman; tombol ikon di sebelah "Salin Link"
   membuka overlay di tab baru dengan latar kotak-kotak.
 - Status Online/Offline overlay asli (hijau saat link sedang dibuka).

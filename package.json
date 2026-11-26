@@ -1,6 +1,6 @@
 {
   "name": "jekinteract",
-  "version": "1.0.33",
+  "version": "1.0.34",
   "description": "JekInteract - tools interaksi TikTok Live (fase UI). Tanpa dependency, jalankan dengan npm start.",
   "main": "electron/main.js",
   "private": true,

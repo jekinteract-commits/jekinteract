@@ -7,6 +7,7 @@ import { toast, bindCopy } from './lib/ui.js';
 import { OVERLAY_TOTAL } from './lib/overlays.js';
 import { initMusicPlayer } from './lib/musicPlayer.js';
 import { initTTS } from './lib/tts.js';
+import { initAlertSounds } from './lib/alertSounds.js';
 
 import dashboard from './pages/dashboard.js';
 import analytics from './pages/analytics.js';
@@ -328,6 +329,7 @@ async function boot() {
   await Sync.connect({ role: 'dashboard' });
   startAudioListener();
   initTTS();
+  initAlertSounds(onAudioUnlock); // suara alert tetap terdengar dari halaman mana pun
   initMusicPlayer();
   initMusicFloat();
   if (!Sync.online) toast('Server JekInteract tidak merespons. Preview overlay dan status online belum aktif.', 'warn', 6500);

@@ -1658,15 +1658,31 @@ function broadcastChatToOverlay(data) {
  */
 function chatAfterConnect(data) {
   if (tiktokState !== 'online' || !tiktokConnectedAt) return false;
-  const raw = Number(data && (data.createTime || data.create_time || data.msgCreateTime || data.timestamp));
-  if (!Number.isFinite(raw) || raw <= 0) return true; // tanpa timestamp → dianggap komentar baru
-  const ms = raw < 1e12 ? raw * 1000 : raw;
-  return ms >= tiktokConnectedAt - 2000; // toleransi 2 detik beda jam
+  const d = data || {};
+  // tiktok-live-connector v2.5 mengirim WebcastChatMessage mentah: waktu dibuat
+  // ada di common.createTime (string detik), BUKAN di field top-level. Field
+  // top-level tetap dicek untuk payload versi lama/format lain.
+  const candidates = [
+    d.common && d.common.createTime,
+    d.createTime,
+    d.create_time,
+    d.msgCreateTime,
+    d.timestamp
+  ];
+  for (const c of candidates) {
+    const raw = Number(c);
+    if (!Number.isFinite(raw) || raw <= 0) continue;
+    const ms = raw < 1e12 ? raw * 1000 : raw;
+    return ms >= tiktokConnectedAt - 2000; // toleransi 2 detik beda jam
+  }
+  return true; // tanpa timestamp yang valid → dianggap komentar baru
 }
 
-// Join Alert — kirim hanya ke overlay joinalert (preview ikut menerima meski tidak presence).
+// Join Alert — dikirim ke overlay OBS dan ke semua dashboard. Dashboard hanya
+// menyuarakan alert bila overlay asli tidak online, jadi tidak ada suara dobel.
 function broadcastJoinAlert(payload) {
-  broadcast('joinalert', payload, (c) => c.role === 'overlay' && c.id === 'joinalert');
+  broadcast('joinalert', payload, (c) =>
+    (c.role === 'overlay' && c.id === 'joinalert') || c.role === 'dashboard');
 }
 
 /**
@@ -1840,9 +1856,10 @@ function processJoinAlert(data) {
 /* Follow Alert — kartu saat ada yang follow live yang terhubung       */
 /* ------------------------------------------------------------------ */
 
-// Kirim hanya ke overlay followalert (preview ikut menerima meski tidak presence).
+// Follow Alert — dikirim ke overlay OBS dan ke semua dashboard (lihat Join Alert).
 function broadcastFollowAlert(payload) {
-  broadcast('followalert', payload, (c) => c.role === 'overlay' && c.id === 'followalert');
+  broadcast('followalert', payload, (c) =>
+    (c.role === 'overlay' && c.id === 'followalert') || c.role === 'dashboard');
 }
 
 /** Suara soundboard yang dipilih di halaman Follow Alert. */
@@ -2836,24 +2853,24 @@ async function tiktokConnect(req, res) {
       if (ev === 'gift') { processGiftEvent(data || {}); processGoalCoin(data || {}); }
       if (ev === 'share') processGoalShare();
       if (ev === 'follow') processGoalFollow();
+      // Komentar lama yang dikirim ulang TikTok saat connect bukan komentar baru.
+      // Flag ini dipakai TTS, musik (!play/!skip), Subathon, dan aktivitas.
+      const afterConnect = ev === 'chat' ? chatAfterConnect(data || {}) : true;
       // Subathon — tambah waktu timer dari TikTok events
       if (ev === 'like')      processSubathonEvent('like', data || {});
       if (ev === 'gift')      processSubathonEvent('coin', data || {});
       if (ev === 'follow')    processSubathonEvent('follow', data || {});
       if (ev === 'share')     processSubathonEvent('share', data || {});
-      if (ev === 'chat')      processSubathonEvent('comment', data || {});
+      if (ev === 'chat' && afterConnect) processSubathonEvent('comment', data || {});
       if (ev === 'subscribe') processSubathonEvent('subscribe', data || {});
       if (ev === 'member')    processSubathonEvent('follow', data || {}); // v2.5 join as member
       // Join Alert — kartu overlay saat penonton join (sudah termasuk filter who)
       if (ev === 'member' || ev === 'join') processJoinAlert(data || {});
       // Follow Alert — kartu overlay saat ada yang follow live yang terhubung
       if (ev === 'follow') processFollowAlert(data || {});
-      // Komentar lama yang dikirim ulang TikTok saat connect tidak boleh memicu
-      // musik (!play/!skip) maupun dibacakan TTS.
-      const afterConnect = ev === 'chat' ? chatAfterConnect(data || {}) : true;
       if (ev === 'chat' && afterConnect) processMusicCommand(data || {});
       // Jalankan aktivitas yang cocok
-      runActivities(ev, data || {});
+      if (ev !== 'chat' || afterConnect) runActivities(ev, data || {});
       // Kirim event ke semua dashboard client via SSE.
       broadcastTiktok(ev, {
         username: raw,
