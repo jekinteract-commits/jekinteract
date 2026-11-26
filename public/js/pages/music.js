@@ -29,12 +29,12 @@ export default {
     const cfg = Object.assign({}, DEFAULTS.music, Store.get('music', {}));
     const initVol = Math.max(0, Math.min(100, Number(cfg.volume == null ? 100 : cfg.volume) || 0));
     return (
-      '<div class="ph"><h1>YouTube Music</h1><p>Penonton request lagu lewat komentar. Lagu diputar langsung dari <b>overlay</b> (iframe YouTube ada di overlay, bukan di sini). Buka overlay di OBS atau tab terpisah agar suara keluar.</p></div>' +
+      '<div class="ph"><h1>YouTube Music</h1><p>Penonton request lagu lewat komentar. Suara keluar dari <b>dashboard ini</b> (player tersembunyi). Link overlay hanya menampilkan thumbnail &amp; progres — detiknya sinkron dengan dashboard, tidak mengeluarkan suara.</p></div>' +
       '<div class="stack">' +
 
       /* ---- Status Sedang Diputar ---- */
       '<section class="panel mu-player-panel">' +
-      '<div class="fh"><div class="fh-t"><h2>Sedang Diputar</h2><div class="sub">Lagu diputar dari iframe di overlay. Suara keluar dari browser yang membuka overlay.</div></div>' +
+      '<div class="fh"><div class="fh-t"><h2>Sedang Diputar</h2><div class="sub">Suara dari dashboard. Progres di sini jadi sumber detik untuk overlay.</div></div>' +
       '<div class="mu-player-acts">' +
       '<button type="button" class="btn sm secondary" id="mu-btn-pause">' + icon('pause') + '<span id="mu-pause-label">Pause</span></button>' +
       '<button type="button" class="btn sm" id="mu-btn-skip">' + icon('skip') + 'Skip</button>' +
@@ -288,7 +288,9 @@ export default {
       let info = nowEl && nowEl.querySelector('.mu-now-info');
       const elapsed = ms.elapsed || 0;
       const durText = now.dur > 0 ? fmtMMSS(elapsed) + ' / ' + fmtMMSS(now.dur) : fmtMMSS(elapsed);
-      const statusText = ms && ms.paused ? 'Dijeda' : (now.ytId ? 'Memutar' : 'Mencari di YouTube...');
+      const statusText = ms && ms.paused ? 'Dijeda'
+        : (!now.ytId ? 'Mencari di YouTube...'
+          : (!now.dur && !(ms.elapsed > 0) ? 'Menyiapkan audio...' : 'Memutar'));
       const ytLink = now.ytId ? 'https://www.youtube.com/watch?v=' + now.ytId : '';
       const html =
         '<div class="mu-now-info">' +

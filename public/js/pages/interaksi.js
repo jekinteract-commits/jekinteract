@@ -873,7 +873,7 @@ function stopApAudio() {
   if (_apAudio) { try { _apAudio.pause(); _apAudio.src = ''; } catch (_) {} _apAudio = null; }
 }
 
-function openAudioPicker(onApply) {
+export function openAudioPicker(onApply) {
   let _page = 1;
   let _query = '';
   let _loading = false;

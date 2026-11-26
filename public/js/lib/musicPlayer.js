@@ -4,10 +4,14 @@
  * Player ini hidup di elemen #yt-music-player yang berada di luar #view,
  * sehingga tidak pernah dihancurkan saat user ganti halaman menu di dashboard.
  *
+ * Player ini adalah SATU-SATUNYA sumber audio. Link overlay tidak memutar
+ * YouTube — ia hanya menampilkan thumbnail + progres dari server.
+ *
  * Tugasnya:
  *  - Mendengarkan SSE musicstate dari Sync
  *  - Saat ada nowPlaying.ytId → load + autoplay video YouTube
- *  - Kirim durasi & judul asli ke server saat video mulai playing
+ *  - Kirim judul asli + posisi getCurrentTime() ke server tiap detik, supaya
+ *    angka detik di dashboard dan di overlay identik
  *  - Skip otomatis saat video selesai
  *  - Tetap berjalan meski user pindah ke halaman #/interaksi, #/gift, dll
  *  - Tetap berjalan meski user pindah tab browser (dengan keepAlive AudioContext)
@@ -104,9 +108,30 @@ let currentYtId = '';      // ytId yang sedang di-load
 let musicPaused = false;   // status jeda dari server
 let musicVolume = 100;     // volume dari server (0-100)
 let resumeTimer = null;    // timer retry play untuk kasus autoplay diblokir/throttle
+let progressTimer = null;  // kirim posisi video ke server tiap detik
 
 function clearResumeTimer() {
   if (resumeTimer) { clearTimeout(resumeTimer); resumeTimer = null; }
+}
+
+function stopProgressReport() {
+  if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+}
+
+/** Server menyimpan elapsed dari sini; dashboard + overlay baca nilai yang sama. */
+function startProgressReport() {
+  stopProgressReport();
+  const report = () => {
+    const np = Sync.music && Sync.music.nowPlaying;
+    if (!np || np.uid !== currentUid || !ytPlayer) { stopProgressReport(); return; }
+    try {
+      const elapsed = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
+      const dur = ytPlayer.getDuration ? Math.round(ytPlayer.getDuration()) : 0;
+      API.musicProgress(np.uid, elapsed, dur).catch(() => {});
+    } catch (_) { /* player belum siap — laporan berikutnya akan mencoba lagi */ }
+  };
+  report();
+  progressTimer = setInterval(report, 1000);
 }
 
 /** Paksa play jika seharusnya memutar tapi player masih pause/unstarted. */
@@ -149,6 +174,7 @@ function applyControl(ms) {
 
 function loadVideo(ytId, song) {
   if (!ytId) return;
+  stopProgressReport(); // posisi lama tidak boleh dipakai lagu baru
   currentYtId = ytId;
 
   if (!ytPlayer) {
@@ -216,10 +242,10 @@ function onPlayerStateChange(e) {
   if (e.data === 1 && ytPlayer) {
     clearResumeTimer();
     try {
-      const dur = Math.round(ytPlayer.getDuration());
       const np = Sync.music && Sync.music.nowPlaying;
       if (np && np.uid === currentUid) {
-        if (dur > 0) API.musicDuration(np.uid, dur).catch(() => {});
+        // Kirim durasi + posisi asli sekaligus; laporan berikutnya tiap detik.
+        startProgressReport();
         const info = ytPlayer.getVideoData && ytPlayer.getVideoData();
         if (info && info.title && info.title !== np.title) {
           API.musicTitle(np.uid, info.title).catch(() => {});
@@ -232,6 +258,7 @@ function onPlayerStateChange(e) {
   // ENDED = 0
   if (e.data === 0) {
     clearResumeTimer();
+    stopProgressReport();
     const np = Sync.music && Sync.music.nowPlaying;
     if (np && np.uid === currentUid) {
       API.musicSkip('yt-ended').catch(() => {});
@@ -270,6 +297,7 @@ function onMusicState(ms) {
 
   if (!now) {
     // Tidak ada lagu — stop
+    stopProgressReport();
     if (ytPlayer && ytPlayer.stopVideo) { try { ytPlayer.stopVideo(); } catch (_) {} }
     currentUid = '';
     currentYtId = '';
@@ -301,6 +329,7 @@ function onMusicState(ms) {
 }
 
 function onMusicSkip() {
+  stopProgressReport();
   if (ytPlayer && ytPlayer.stopVideo) { try { ytPlayer.stopVideo(); } catch (_) {} }
   currentUid = '';
   currentYtId = '';

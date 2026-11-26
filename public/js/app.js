@@ -19,17 +19,19 @@ import subathon from './pages/subathon.js';
 import winlose from './pages/winlose.js';
 import likes from './pages/likes.js';
 import chat from './pages/chat.js';
+import joinAlert from './pages/joinAlert.js';
+import followAlert from './pages/followAlert.js';
 import gifters from './pages/gifters.js';
 import goals from './pages/goals.js';
 import settings from './pages/settings.js';
 
-const PAGES = [dashboard, analytics, connection, interaksi, gifts, music, tts, subathon, winlose, likes, chat, gifters, goals, settings];
+const PAGES = [dashboard, analytics, connection, interaksi, gifts, music, tts, subathon, winlose, likes, chat, joinAlert, followAlert, gifters, goals, settings];
 const BY_ID = Object.fromEntries(PAGES.map((p) => [p.id, p]));
 const GROUPS = [
   { name: 'Selamat Datang', ids: ['dashboard', 'analytics'] },
   { name: 'Setup', ids: ['connection', 'interaksi', 'gifts'] },
   { name: 'Tools', ids: ['music', 'tts', 'subathon', 'winlose'] },
-  { name: 'Overlays', ids: ['likes', 'chat', 'gifters', 'goals'] }
+  { name: 'Overlays', ids: ['likes', 'chat', 'joinalert', 'followalert', 'gifters', 'goals'] }
 ];
 
 /* ---------------------------- Shell ---------------------------- */
@@ -278,7 +280,8 @@ function startAudioListener() {
  *  - Muncul di pojok kanan bawah (mu-float-mini) saat ada lagu & bukan di halaman Music
  *  - Muncul full di halaman Music sebagai preview embed (mu-float-embed)
  *
- * Suara keluar dari #yt-music-player via musicPlayer.js, bukan dari #mu-float-iframe.
+ * #mu-float hanya preview tanpa audio. Suara keluar dari #yt-music-player
+ * via musicPlayer.js; overlay/OBS juga tanpa audio, cukup baca progres server.
  */
 function initMusicFloat() {
   const floatEl = document.getElementById('mu-float');

@@ -22,8 +22,30 @@ Port lain: `PORT=4000 npm start`.
 
 - Dashboard, Analytics (riwayat 30 hari, hapus otomatis), Connection (simulasi), Pusat Interaksi
   (20 screen, interaksi, aktivitas, upload gambar/video/audio, keyboard virtual), TikTok Data Gift (contoh),
-  YouTube Music, Baca Komentar (tester suara asli), Subathon Timer, Win Lose Bar, Like Leaderboard,
-  Komen, Top Gifter Leaderboard, Goals, Pengaturan (hapus cache antrean screen 1-20).
+  YouTube Music (command !play/!skip dari komentar juga hanya memproses komentar baru setelah
+  konek), Baca Komentar (tester suara asli; hanya membaca komentar baru setelah konek,
+  bukan komentar lama yang dikirim ulang TikTok saat connect), Subathon Timer, Win Lose Bar,
+  Like Leaderboard, Komen, Top Gifter Leaderboard, Goals, Pengaturan (hapus cache antrean screen 1-20).
+- Join Alert (grup Overlays): kartu overlay transparan saat penonton join ke live yang
+  terhubung di Connection (foto profil asli penonton ditampilkan). Toggle **Enabled** di
+  paling atas panel Setingan Alert (model switch seperti Baca Komentar) untuk
+  menyalakan/mematikan alert otomatis — **defaultnya mati**, pengguna yang menentukan
+  sendiri. Toggle suara juga memakai model switch yang sama. Filter:
+  Semua Orang / Follower / Fan Club. Durasi tampil per alert (1–30 detik) dan alert berurutan lewat
+  antrian (tidak saling ngeskip). Jeda join ulang bisa diatur dalam menit (0 = selalu
+  muncul): dihitung sejak alert terakhir untuk orang yang sama, sehingga join bolak-balik
+  tidak memicu alert berulang. History 100 entri terakhir menampilkan Nickname, Username,
+  dan keterangan User Baru / Follower kamu / Pernah join live (plus penanda alert dilewati),
+  otomatis scroll setelah sekitar 5 entri, dan tombol hapus history. Soundboard myinstants.com (pencarian, preview,
+  volume) seperti Trigger Audio di Form Tambah Interaksi. Ada Salin Link, Tes Alert, dan
+  Preview Overlay.
+- Follow Alert (grup Overlays): kartu overlay transparan saat ada penonton follow ke
+  live yang terhubung di Connection. Toggle **Enabled** (default mati) dan durasi tampil
+  (1–30 detik). Setiap event follow langsung memicu alert tanpa jeda, alert berurutan
+  lewat antrian. Soundboard myinstants.com + volume seperti Join Alert, Salin Link
+  Overlay, Tes Alert (tetap jalan walau toggle mati/belum konek), Preview Overlay, dan
+  History 100 entri terakhir (Nickname, Username, Follower Baru / Pernah follow) dengan
+  tombol hapus history.
 - Semua overlay berlatar transparan. Link overlay ada di tiap halaman; tombol ikon di sebelah "Salin Link"
   membuka overlay di tab baru dengan latar kotak-kotak.
 - Status Online/Offline overlay asli (hijau saat link sedang dibuka).

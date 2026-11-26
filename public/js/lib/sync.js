@@ -179,6 +179,18 @@ export const Sync = {
           return;
         }
 
+        if (event === 'joinalert') {
+          if (!d) return;
+          Sync.emit('joinalert', d);
+          return;
+        }
+
+        if (event === 'followalert') {
+          if (!d) return;
+          Sync.emit('followalert', d);
+          return;
+        }
+
         if (event === 'obsstate') {
           if (!d) return;
           Sync.obs = d;
@@ -211,7 +223,11 @@ export const Sync = {
           else if (d.event === 'connecting')   Sync.tiktok = { state: 'connecting',  username: d.username,       error: '',             available: true };
           else if (d.event === 'disconnected') Sync.tiktok = { state: 'offline',     username: '',               error: '',             available: true };
           else if (d.event === 'error')        Sync.tiktok = { state: 'error',       username: d.username || '', error: d.message || '', available: true };
-          Sync.emit('tiktok', Object.assign({}, Sync.tiktok, { event: d.event, data: d.data }));
+          Sync.emit('tiktok', Object.assign({}, Sync.tiktok, {
+            event: d.event,
+            data: d.data,
+            afterConnect: d.afterConnect
+          }));
           return;
         }
       }
@@ -318,6 +334,18 @@ export const API = {
   }),
   tiktokDisconnect: () => json('/api/tiktok/disconnect', { method: 'POST' }),
   tiktokStatus: () => json('/api/tiktok/status'),
+  joinAlertTest: (name) => json('/api/joinalert/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name || 'viewer_contoh' })
+  }),
+  joinAlertClearHistory: () => json('/api/joinalert/history/clear', { method: 'POST' }),
+  followAlertTest: (name) => json('/api/followalert/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name || 'viewer_contoh' })
+  }),
+  followAlertClearHistory: () => json('/api/followalert/history/clear', { method: 'POST' }),
   keystrokeStatus: () => json('/api/keystroke/status'),
   keystrokeConfig: () => json('/api/keystroke/config'),
   saveKeystrokeConfig: (cfg) => json('/api/keystroke/config', {
@@ -378,6 +406,12 @@ export const API = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ uid, dur })
+  }),
+  /** Kirim posisi getCurrentTime() dari player dashboard ke server (sumber detik bersama). */
+  musicProgress: (uid, elapsed, dur) => json('/api/music/progress', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uid, elapsed, dur })
   }),
   musicTitle: (uid, title) => json('/api/music/title', {
     method: 'POST',

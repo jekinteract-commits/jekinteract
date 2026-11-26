@@ -411,6 +411,9 @@ function passesWho(who, data, u) {
 
 const onChat = (ev) => {
   if (!ev || ev.event !== 'chat') return;
+  // Server menandai komentar yang dikirim ulang TikTok saat proses connect.
+  // Komentar lama itu bukan komentar baru di live ini — jangan dibacakan.
+  if (ev.afterConnect === false) return;
 
   // Ambil konfigurasi TTS terbaru dari store setiap kali ada komentar.
   const cfg = ttsConfig();

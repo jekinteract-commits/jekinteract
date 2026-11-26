@@ -104,6 +104,8 @@ const LOADERS = {
   likes: () => import('./board.js'),
   gifters: () => import('./board.js'),
   chat: () => import('./chat.js'),
+  joinalert: () => import('./joinAlert.js'),
+  followalert: () => import('./followAlert.js'),
   goal: () => import('./goal.js')
 };
 

@@ -128,6 +128,9 @@ let tunnelUrl = '';
 let licenseWindow = null;
 let appStarted = false;
 let appQuitting = false;
+let loadingReady = false;
+let loadingPageActive = false;
+let lastLoadingStatus = { text: 'Menyiapkan jendela aplikasi…', pct: 8 };
 
 // ── Keluar & hak Administrator ────────────────────────────────────────────────
 const QUIT_SHORTCUT = 'Ctrl+Alt+Shift+Q';
@@ -582,8 +585,32 @@ function injectTunnelUrl(url) {
   mainWindow.webContents.send('tunnel-url', tunnelUrl);
 }
 
+/**
+ * Update teks/progress splash. splash memakai DOM biasa (id #status, #pct, #bar),
+ * jadi tidak perlu menambah bridge/IPC baru di preload.
+ */
+function setLoadingStatus(text, pct) {
+  lastLoadingStatus = { text: String(text), pct: Number(pct) || 0 };
+  if (!loadingPageActive || !loadingReady) return;
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const value = Math.max(4, Math.min(100, Math.round(lastLoadingStatus.pct)));
+    const js =
+      '(function(){' +
+      'var s=document.getElementById("status");if(s)s.textContent=' + JSON.stringify(lastLoadingStatus.text) + ';' +
+      'var p=document.getElementById("pct");if(p)p.textContent=' + JSON.stringify(value + '%') + ';' +
+      'var b=document.getElementById("bar");if(b)b.style.setProperty("--p",' + JSON.stringify(value + '%') + ');' +
+      '})()';
+    mainWindow.webContents.executeJavaScript(js).catch(() => {});
+  } catch (_) {}
+}
+
 // ── Buat window utama ─────────────────────────────────────────────────────────
 function createWindow(port) {
+  loadingReady = false;
+  loadingPageActive = !port; // tanpa port → splash lokal, langsung terlihat
+  if (port) serverPort = port;
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -591,8 +618,8 @@ function createWindow(port) {
     minHeight: 600,
     title: 'JekInteract',
     icon: appIcon(),
-    backgroundColor: '#0f172a',
-    show: false,
+    backgroundColor: loadingPageActive ? '#07050f' : '#0f172a',
+    show: loadingPageActive, // splash langsung muncul; dashboard menunggu ready-to-show
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -603,7 +630,8 @@ function createWindow(port) {
     }
   });
 
-  mainWindow.loadURL('http://127.0.0.1:' + port);
+  if (port) mainWindow.loadURL('http://127.0.0.1:' + port);
+  else mainWindow.loadFile(path.join(__dirname, 'loading.html'));
 
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow.isVisible()) mainWindow.show();
@@ -620,6 +648,10 @@ function createWindow(port) {
 
   mainWindow.webContents.on('did-finish-load', () => {
     log('[electron] window selesai load (did-finish-load)');
+    if (loadingPageActive) {
+      loadingReady = true;
+      setLoadingStatus(lastLoadingStatus.text, lastLoadingStatus.pct);
+    }
     if (tunnelUrl) injectTunnelUrl(tunnelUrl);
   });
 
@@ -640,15 +672,36 @@ function createWindow(port) {
   });
 
   mainWindow.webContents.on('will-navigate', (e, url) => {
-    if (url.startsWith('http://127.0.0.1:' + port) || url.startsWith('http://localhost:' + port)) return;
+    if (url.startsWith('http://127.0.0.1:' + serverPort) || url.startsWith('http://localhost:' + serverPort)) return;
     e.preventDefault();
     shell.openExternal(url);
   });
 
   mainWindow.on('closed', () => {
     unregisterWinloseHotkeys();
+    loadingReady = false;
+    loadingPageActive = false;
     mainWindow = null;
   });
+}
+
+/** Ganti isi jendela splash yang SUDAH ADA ke dashboard — tanpa bikin window baru. */
+function showDashboard(port) {
+  serverPort = port;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    setLoadingStatus('Membuka dashboard…', 92);
+  }
+  loadingPageActive = false;
+  loadingReady = false;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow(port);
+    return;
+  }
+  mainWindow.loadURL('http://127.0.0.1:' + port);
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow.isVisible()) mainWindow.show();
+  mainWindow.focus();
+  if (tunnelUrl) injectTunnelUrl(tunnelUrl);
 }
 
 // ── Tray icon ─────────────────────────────────────────────────────────────────
@@ -768,8 +821,9 @@ async function startProtectedApp() {
   try {
     if (licenseWindow && !licenseWindow.isDestroyed()) licenseWindow.close();
 
+    setLoadingStatus('Menyiapkan dashboard…', 88);
     const port = await startServer();
-    createWindow(port);
+    showDashboard(port); // pakai ulang jendela splash — jangan bikin window baru
     createTray(port);
 
     // Tunnel tidak menahan jendela: dashboard sudah tampil.
@@ -849,6 +903,13 @@ app.whenReady().then(async () => {
       ' portableDir=' + (process.env.PORTABLE_EXECUTABLE_DIR || '-'));
   log('[electron] file log: ' + (LOG_FILES.length ? LOG_FILES.join(' | ') : '(tidak ada yang bisa ditulis)'));
 
+  // Jendela (dan tombol taskbar) muncul SEBELUM cek lisensi / start server.
+  // Mode install driver tidak butuh jendela — dia langsung restart / minta UAC.
+  if (!process.argv.includes(INTERCEPTION_SETUP_ARG)) {
+    createWindow();
+    log('[electron] jendela loading ditampilkan');
+  }
+
   // Shortcut keluar global — berguna saat window disembunyikan di tray dan
   // pengguna ingin menghapus/mengganti file .exe (file sedang dikunci proses).
   try {
@@ -868,6 +929,8 @@ app.whenReady().then(async () => {
   }
 
   // ── Gate lisensi: jangan jalankan server sebelum key tervalidasi ──────────
+  // Cek lisensi berjalan di belakang splash yang sudah terlihat.
+  setLoadingStatus('Memeriksa lisensi…', 28);
   let status;
   try {
     status = await license.verify();

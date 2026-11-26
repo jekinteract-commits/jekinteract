@@ -232,3 +232,117 @@ body.bg { background: conic-gradient(#171233 25%, #0f0b22 0 50%, #171233 0 75%, 
 .gol-seg i.on { background: var(--acc); box-shadow: 0 0 8px var(--acc); }
 .gol-f { display: flex; justify-content: space-between; font: 700 13px var(--f-display); letter-spacing: .06em; color: var(--txt-2); }
 .gol.done .gol-f span:last-child { color: var(--mint); }
+
+/* ---------- Join Alert ----------
+   Kanvas tetap transparan: hanya kartu alert yang terlihat, dan hanya saat
+   ada event join / tes alert. */
+.ja { position: absolute; inset: 0; pointer-events: none; }
+.ja-card.cut {
+  --c: 18px;
+  --bw: 2px;
+  --bd: linear-gradient(135deg, var(--cyan), var(--violet) 50%, var(--mag));
+  --bg: linear-gradient(135deg, rgba(19, 13, 48, .96), rgba(8, 5, 22, .94));
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 380px;
+  max-width: 94%;
+  padding: 14px 30px 16px 14px;
+  box-shadow: 0 12px 38px rgba(0, 0, 0, .55), 0 0 28px rgba(41, 243, 255, .24);
+  opacity: 0;
+  visibility: hidden;
+}
+.ja-av {
+  width: 76px;
+  height: 76px;
+  box-shadow: 0 0 0 2px rgba(41, 243, 255, .85), 0 0 18px rgba(41, 243, 255, .45);
+}
+.ja-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ja-kicker {
+  display: flex; align-items: center; gap: 8px;
+  font: 800 12px/1 var(--f-display); letter-spacing: .2em; text-transform: uppercase;
+  color: var(--cyan); text-shadow: 0 0 12px rgba(41, 243, 255, .7);
+}
+.ja-kicker i { width: 9px; height: 9px; background: var(--mag); transform: skewX(-20deg); box-shadow: 0 0 10px var(--mag); }
+.ja-name {
+  max-width: 400px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font: 900 30px/1.15 var(--f-display); letter-spacing: .03em; color: #fff;
+  text-shadow: -2px 0 rgba(41, 243, 255, .75), 2px 0 rgba(255, 45, 143, .75), 0 0 18px rgba(139, 92, 255, .65);
+}
+.ja-sub { font: 600 14px/1.3 var(--f-ui); color: var(--txt-2); }
+.ja-glitch {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: linear-gradient(90deg, transparent, var(--cyan), var(--mag), transparent);
+  opacity: .85;
+}
+.ja-card.show, .ja-card.out { visibility: visible; }
+.ja-card.show { animation: jaIn .5s var(--ease) both; }
+.ja-card.out { animation: jaOut .42s var(--ease) both; }
+@keyframes jaIn {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 22px)) scale(.94); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes jaOut {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to   { opacity: 0; transform: translate(-50%, calc(-50% - 16px)) scale(.98); }
+}
+
+/* ---------- Follow Alert ----------
+   Sama seperti Join Alert: kanvas transparan, kartu hanya terlihat saat ada
+   event follow / tes alert. Warna & bentuk mengikuti tema overlay JekInteract. */
+.fa { position: absolute; inset: 0; pointer-events: none; }
+.fa-card.cut {
+  --c: 18px;
+  --bw: 2px;
+  --bd: linear-gradient(135deg, var(--cyan), var(--violet) 50%, var(--mag));
+  --bg: linear-gradient(135deg, rgba(19, 13, 48, .96), rgba(8, 5, 22, .94));
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 380px;
+  max-width: 94%;
+  padding: 14px 30px 16px 14px;
+  box-shadow: 0 12px 38px rgba(0, 0, 0, .55), 0 0 28px rgba(255, 45, 143, .24);
+  opacity: 0;
+  visibility: hidden;
+}
+.fa-av {
+  width: 76px;
+  height: 76px;
+  box-shadow: 0 0 0 2px rgba(255, 45, 143, .85), 0 0 18px rgba(255, 45, 143, .45);
+}
+.fa-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.fa-kicker {
+  display: flex; align-items: center; gap: 8px;
+  font: 800 12px/1 var(--f-display); letter-spacing: .2em; text-transform: uppercase;
+  color: var(--mag); text-shadow: 0 0 12px rgba(255, 45, 143, .7);
+}
+.fa-kicker i { width: 9px; height: 9px; background: var(--cyan); transform: skewX(-20deg); box-shadow: 0 0 10px var(--cyan); }
+.fa-name {
+  max-width: 400px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font: 900 30px/1.15 var(--f-display); letter-spacing: .03em; color: #fff;
+  text-shadow: -2px 0 rgba(41, 243, 255, .75), 2px 0 rgba(255, 45, 143, .75), 0 0 18px rgba(139, 92, 255, .65);
+}
+.fa-sub { font: 600 14px/1.3 var(--f-ui); color: var(--txt-2); }
+.fa-glitch {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: linear-gradient(90deg, transparent, var(--mag), var(--cyan), transparent);
+  opacity: .85;
+}
+.fa-card.show, .fa-card.out { visibility: visible; }
+.fa-card.show { animation: faIn .5s var(--ease) both; }
+.fa-card.out { animation: faOut .42s var(--ease) both; }
+@keyframes faIn {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 22px)) scale(.94); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes faOut {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to   { opacity: 0; transform: translate(-50%, calc(-50% - 16px)) scale(.98); }
+}

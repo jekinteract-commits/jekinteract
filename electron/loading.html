@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07050f">
+  <title>JekInteract — Harap Tunggu</title>
+  <link rel="icon" type="image/svg+xml" href="../public/assets/logo.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" media="print" onload="this.media='all'"
+        href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Orbitron:wght@500;600;700;800;900&display=swap">
+
+  <!-- Token warna/font yang SAMA dengan dashboard (theme.css). -->
+  <link rel="stylesheet" href="../public/css/theme.css">
+  <style>
+    html, body { height: 100%; }
+
+    body {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(41, 243, 255, .10), transparent 42%),
+        radial-gradient(circle at 82% 88%, rgba(255, 45, 143, .10), transparent 45%),
+        var(--void);
+      color: var(--txt);
+    }
+
+    /* Grid halo tipis, sama bahasa visualnya dengan dashboard. */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .35;
+      background-image:
+        linear-gradient(rgba(139, 92, 255, .06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139, 92, 255, .06) 1px, transparent 1px);
+      background-size: 36px 36px;
+    }
+
+    .wrap {
+      position: relative;
+      width: min(520px, calc(100vw - 48px));
+    }
+
+    /* Bingkai chamfer kiri-atas & kanan-bawah (HUD arcade), seperti .panel. */
+    .card {
+      position: relative;
+      --c: 18px;
+      --bw: 1px;
+      --bd: linear-gradient(135deg, rgba(41, 243, 255, .75), var(--violet) 48%, rgba(255, 45, 143, .7));
+      background: var(--bd);
+      padding: var(--bw);
+      clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+      box-shadow: 0 30px 90px rgba(0, 0, 0, .65);
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: var(--bw);
+      background: linear-gradient(180deg, var(--ink-2), var(--ink-0));
+      clip-path: polygon(calc(var(--c) - var(--bw)) 0, 100% 0, 100% calc(100% - var(--c) + var(--bw)), calc(100% - var(--c) + var(--bw)) 100%, 0 100%, 0 calc(var(--c) - var(--bw)));
+      pointer-events: none;
+    }
+    .inner {
+      position: relative;
+      padding: 34px 34px 30px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 30px;
+    }
+    .brand img { width: 46px; height: 46px; }
+    .brand-text h2 {
+      font: 800 19px/1 var(--f-display);
+      letter-spacing: .06em;
+    }
+    .brand-text small {
+      display: block;
+      margin-top: 7px;
+      font: 700 10px/1 var(--f-ui);
+      letter-spacing: 2.6px;
+      color: var(--cyan);
+      text-transform: uppercase;
+    }
+
+    .ring {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      margin-bottom: 24px;
+      background: conic-gradient(from 0deg, var(--cyan), var(--violet), var(--mag), var(--cyan));
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+      mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+      animation: spin 1.1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    h1 {
+      font: 900 clamp(26px, 5vw, 34px)/1.15 var(--f-display);
+      letter-spacing: .02em;
+      background: var(--brand);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .lead {
+      margin-top: 10px;
+      font: 500 14px/1.5 var(--f-ui);
+      color: var(--txt-2);
+    }
+
+    .status-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 26px 0 10px;
+      font: 600 12.5px/1 var(--f-ui);
+      color: var(--cyan);
+    }
+    .status-row #pct {
+      font: 700 11px/1 var(--f-display);
+      color: var(--txt-3);
+      letter-spacing: .08em;
+    }
+
+    .track {
+      height: 6px;
+      background: var(--ink-3);
+      overflow: hidden;
+      clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+    }
+    .bar {
+      --p: 8%;
+      width: var(--p);
+      height: 100%;
+      background: var(--brand);
+      box-shadow: 0 0 16px rgba(41, 243, 255, .55);
+      transition: width .45s var(--ease);
+    }
+    .bar::after {
+      content: "";
+      display: block;
+      width: 40px;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .45), transparent);
+      animation: sweep 1.4s linear infinite;
+    }
+    @keyframes sweep { from { transform: translateX(-40px); } to { transform: translateX(520px); } }
+
+    .foot {
+      margin-top: 22px;
+      padding-top: 16px;
+      border-top: 1px dashed var(--line);
+      font: 500 11px/1.5 var(--f-ui);
+      letter-spacing: .03em;
+      color: var(--txt-3);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="inner">
+        <div class="brand">
+          <img src="../public/assets/logo.svg" alt="JekInteract">
+          <div class="brand-text">
+            <h2>JEKINTERACT</h2>
+            <small>Interactive Control Center</small>
+          </div>
+        </div>
+
+        <div class="ring" aria-hidden="true"></div>
+        <h1>Harap Tunggu</h1>
+        <p class="lead">Sedang memproses JekInteract…</p>
+
+        <div class="status-row">
+          <span id="status">Menyiapkan jendela aplikasi…</span>
+          <span id="pct">8%</span>
+        </div>
+        <div class="track"><div class="bar" id="bar"></div></div>
+
+        <div class="foot">Menyiapkan sesi aplikasi Anda. Jendela ini akan berpindah ke menu utama setelah siap.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var status = document.getElementById('status');
+      var pct = document.getElementById('pct');
+      var bar = document.getElementById('bar');
+      var bridge = window.__electronBridge__;
+      if (!bridge || typeof bridge.onLoadingStatus !== 'function') return;
+      bridge.onLoadingStatus(function (s) {
+        if (!s) return;
+        if (s.text) status.textContent = s.text;
+        if (typeof s.pct === 'number') {
+          var v = Math.max(4, Math.min(100, s.pct));
+          bar.style.setProperty('--p', v + '%');
+          pct.textContent = Math.round(v) + '%';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

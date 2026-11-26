@@ -203,6 +203,29 @@ try {
 const DEFAULT_KEYSTROKE_CFG = { target: '', autoFocus: false, focusDelayMs: 250 };
 state.keystrokeCfg = Object.assign({}, DEFAULT_KEYSTROKE_CFG, state.keystrokeCfg || {});
 
+// Join Alert: durasi tampil (detik) dan jeda join ulang (menit) punya nilai awal.
+state.joinAlertCfg = Object.assign(
+  { enabled: false, who: 'all', soundOn: true, sound: null, volume: 100, duration: 5, rejoinMinutes: 2 },
+  state.joinAlertCfg || {}
+);
+// Migrasi sekali: build sebelumnya menulis enabled:true sebagai bawaan otomatis.
+// Sekarang default mati; setelah ini, status mengikuti pilihan pengguna sendiri.
+if (state.joinAlertEnableMigrated !== true) {
+  state.joinAlertCfg.enabled = false;
+  state.joinAlertEnableMigrated = true;
+}
+if (!Array.isArray(state.joinAlertHistory)) state.joinAlertHistory = [];
+
+// Follow Alert: pengaturan alert follow (default mati, seperti Join Alert).
+state.followAlertCfg = Object.assign(
+  { enabled: false, soundOn: true, sound: null, volume: 100, duration: 5 },
+  state.followAlertCfg || {}
+);
+// Build sebelumnya punya "jeda follow ulang"; key lama dibuang supaya tidak
+// terbawa saat export config.
+delete state.followAlertCfg.refollowMinutes;
+if (!Array.isArray(state.followAlertHistory)) state.followAlertHistory = [];
+
 let saveTimer = null;
 function saveState() {
   clearTimeout(saveTimer);
@@ -702,6 +725,8 @@ function overlayLabel(id) {
     'winlose':        'Win Lose Bar',
     'likes':          'Like Leaderboard',
     'chat':           'Komen',
+    'joinalert':      'Join Alert',
+    'followalert':    'Follow Alert',
     'gifters':        'Top Gifter',
     'goal-like':      'Target Like',
     'goal-share':     'Target Share',
@@ -937,6 +962,13 @@ async function api(req, res, pathname, q) {
       const body = await readJSON(req);
       if (!Object.prototype.hasOwnProperty.call(body, 'value')) throw httpError(400, 'Field "value" wajib ada');
       state[key] = body.value;
+      // Riwayat join bisa ikut ditulis lewat API state umum; bangun ulang cache
+      // cooldown supaya jeda join ulang tetap konsisten.
+      if (key === 'joinAlertHistory') {
+        if (!Array.isArray(state[key])) state[key] = [];
+        joinAlertSeen = null;
+      }
+      if (key === 'followAlertHistory' && !Array.isArray(state[key])) state[key] = [];
       saveState();
       broadcast('state', { key, value: body.value, src: body.src || null });
       return json(res, 200, { ok: true });
@@ -963,12 +995,77 @@ async function api(req, res, pathname, q) {
     return json(res, 200, { ok: true });
   }
 
+  /* ---------- Join Alert ---------- */
+  // Tes alert dikirim ke overlay yang sama dengan event join asli, jadi tampilan
+  // dan animasinya identik. Sengaja mengabaikan filter agar tombol tes selalu
+  // bisa dipakai walau TikTok belum terhubung.
+  if (pathname === '/api/joinalert/test' && m === 'POST') {
+    const body = await readJSON(req);
+    const name = String((body && body.name) || 'viewer_contoh')
+      .replace(/[<>\r\n\t]/g, '')
+      .trim()
+      .slice(0, 60) || 'viewer_contoh';
+    const jaCfg = state.joinAlertCfg || {};
+    broadcastJoinAlert({
+      name,
+      avatar: null,
+      who: jaCfg.who || 'all',
+      sound: jaCfg.soundOn === false ? null : joinSoundPayload(jaCfg),
+      volume: joinVolume(jaCfg),
+      durationMs: joinDurationMs(jaCfg),
+      test: true,
+      at: Date.now()
+    });
+    return json(res, 200, { ok: true, name });
+  }
+
+  // Bersihkan riwayat Join Alert. Tidak menyentuh konfigurasi/fitur lain.
+  if (pathname === '/api/joinalert/history/clear' && m === 'POST') {
+    state.joinAlertHistory = [];
+    joinAlertSeen = null;
+    saveState();
+    broadcast('state', { key: 'joinAlertHistory', value: state.joinAlertHistory });
+    return json(res, 200, { ok: true });
+  }
+
+  /* ---------- Follow Alert ---------- */
+  // Tes alert memakai jalur broadcast yang sama dengan event follow asli, jadi
+  // tampilan, animasi, dan suaranya identik. Sengaja mengabaikan toggle Enable
+  // agar tombol tes tetap bisa dipakai walau TikTok belum terhubung.
+  if (pathname === '/api/followalert/test' && m === 'POST') {
+    const body = await readJSON(req);
+    const name = String((body && body.name) || 'viewer_contoh')
+      .replace(/[<>\r\n\t]/g, '')
+      .trim()
+      .slice(0, 60) || 'viewer_contoh';
+    const faCfg = state.followAlertCfg || {};
+    broadcastFollowAlert({
+      name,
+      avatar: null,
+      sound: faCfg.soundOn === false ? null : followSoundPayload(faCfg),
+      volume: followVolume(faCfg),
+      durationMs: followDurationMs(faCfg),
+      test: true,
+      at: Date.now()
+    });
+    return json(res, 200, { ok: true, name });
+  }
+
+  // Bersihkan riwayat Follow Alert. Tidak menyentuh konfigurasi/fitur lain.
+  if (pathname === '/api/followalert/history/clear' && m === 'POST') {
+    state.followAlertHistory = [];
+    saveState();
+    broadcast('state', { key: 'followAlertHistory', value: state.followAlertHistory });
+    return json(res, 200, { ok: true });
+  }
+
   /* ---------- Config export / import ---------- */
   // Ekspor semua konfigurasi yang disimpan server (state.json) dalam satu payload.
   // Dipakai oleh dashboard untuk fitur "Ekspor Konfigurasi" (backup).
   if (pathname === '/api/config/export' && m === 'GET') {
     const keys = ['interactions', 'activities', 'music', 'subathonCfg', 'chatCfg',
-                  'gifterCfg', 'likesCfg', 'winlose', 'goals', 'subathon'];
+                  'gifterCfg', 'likesCfg', 'winlose', 'goals', 'subathon',
+                  'joinAlertCfg', 'joinAlertHistory', 'followAlertCfg', 'followAlertHistory'];
     const out = {};
     keys.forEach((k) => { out[k] = state[k]; });
     return json(res, 200, { ok: true, server: out });
@@ -980,7 +1077,8 @@ async function api(req, res, pathname, q) {
     const body = await readJSON(req);
     const src = (body && body.server) || {};
     const allowed = ['interactions', 'activities', 'music', 'subathonCfg', 'chatCfg',
-                     'gifterCfg', 'likesCfg', 'winlose', 'goals', 'subathon'];
+                     'gifterCfg', 'likesCfg', 'winlose', 'goals', 'subathon',
+                     'joinAlertCfg', 'joinAlertHistory', 'followAlertCfg', 'followAlertHistory'];
     let count = 0;
     allowed.forEach((k) => {
       if (src[k] !== undefined) {
@@ -990,6 +1088,18 @@ async function api(req, res, pathname, q) {
       }
     });
     if (src.goals !== undefined) resetGoalCounters();
+    // Riwayat join menentukan status "pernah join" dan jeda join ulang, jadi
+    // cache seen harus dibangun ulang setelah impor.
+    if (src.joinAlertHistory !== undefined) {
+      if (!Array.isArray(state.joinAlertHistory)) state.joinAlertHistory = [];
+      joinAlertSeen = null;
+    }
+    if (src.followAlertHistory !== undefined && !Array.isArray(state.followAlertHistory)) {
+      state.followAlertHistory = [];
+    }
+    if (state.followAlertCfg && typeof state.followAlertCfg === 'object') {
+      delete state.followAlertCfg.refollowMinutes;
+    }
     saveState();
     return json(res, 200, { ok: true, restored: count });
   }
@@ -1126,12 +1236,17 @@ async function api(req, res, pathname, q) {
       chatCfg: {},
       gifterCfg: {},
       likesCfg: {},
-      winlose: {}
+      winlose: {},
+      joinAlertCfg: { enabled: false, who: 'all', soundOn: true, sound: null, volume: 100, duration: 5, rejoinMinutes: 2 },
+      joinAlertHistory: [],
+      followAlertCfg: { enabled: false, soundOn: true, sound: null, volume: 100, duration: 5 },
+      followAlertHistory: []
     };
     Object.keys(defaults).forEach((k) => {
       state[k] = defaults[k];
       broadcast('state', { key: k, value: state[k] });
     });
+    joinAlertSeen = null;
     state.goals = {};
     resetGoalCounters();
     saveState();
@@ -1187,6 +1302,17 @@ async function api(req, res, pathname, q) {
     return json(res, 200, { ok: true });
   }
 
+  // Posisi video dari player dashboard → jadi satu-satunya sumber detik lagu.
+  if (pathname === '/api/music/progress' && m === 'POST') {
+    const body = await readJSON(req);
+    musicSetProgress(
+      String(body.uid || ''),
+      Number(body.elapsed),
+      Number(body.dur)
+    );
+    return json(res, 200, { ok: true });
+  }
+
   if (pathname === '/api/music/title' && m === 'POST') {
     const body = await readJSON(req);
     musicSetTitle(String(body.uid || ''), String(body.title || '').trim().slice(0, 200));
@@ -1218,6 +1344,7 @@ async function api(req, res, pathname, q) {
     musicQueue.length = 0;
     musicNowPlaying = null;
     musicElapsed = 0;
+    musicProgressAt = 0;
     musicPaused = false;
     musicTickStop();
     broadcastMusicState();
@@ -1290,6 +1417,7 @@ let tiktokClient = null;      // instance TikTokLiveConnection aktif
 let tiktokUser = '';          // username yang sedang terhubung
 let tiktokState = 'offline';  // 'offline' | 'connecting' | 'online' | 'error'
 let tiktokError = '';         // pesan error terakhir
+let tiktokConnectedAt = 0;    // waktu koneksi live berhasil dipakai filter komentar lama
 
 /* ------------------------------------------------------------------ */
 /* Like Leaderboard — akumulasi like per user selama sesi live         */
@@ -1521,6 +1649,279 @@ function broadcastTiktok(event, data) {
 // Kirim event chat TikTok ke overlay chat agar menampilkan komentar live
 function broadcastChatToOverlay(data) {
   broadcast('tiktok', Object.assign({ event: 'chat' }, data), (c) => c.role === 'overlay' && c.id === 'chat');
+}
+
+/**
+ * TikTok kadang mengirim ulang komentar lama saat websocket baru tersambung.
+ * TTS harus mengabaikannya: flag ini dihitung dari waktu connect berhasil dan
+ * timestamp asli komentar (kalau tersedia). Event lain tidak terpengaruh.
+ */
+function chatAfterConnect(data) {
+  if (tiktokState !== 'online' || !tiktokConnectedAt) return false;
+  const raw = Number(data && (data.createTime || data.create_time || data.msgCreateTime || data.timestamp));
+  if (!Number.isFinite(raw) || raw <= 0) return true; // tanpa timestamp → dianggap komentar baru
+  const ms = raw < 1e12 ? raw * 1000 : raw;
+  return ms >= tiktokConnectedAt - 2000; // toleransi 2 detik beda jam
+}
+
+// Join Alert — kirim hanya ke overlay joinalert (preview ikut menerima meski tidak presence).
+function broadcastJoinAlert(payload) {
+  broadcast('joinalert', payload, (c) => c.role === 'overlay' && c.id === 'joinalert');
+}
+
+/**
+ * Filter pemicu Join Alert. Dijalankan di server supaya overlay hanya menerima
+ * event yang benar-benar lolos filter: semua orang / follower / fan club.
+ */
+function joinWhoMatches(who, data) {
+  if (who !== 'follower' && who !== 'fanclub') return true;
+  const u = getUser(data) || {};
+  if (who === 'follower') {
+    return !!(u.isFollower ||
+      (data && data.userIdentity && data.userIdentity.isFollowerOfAnchor) ||
+      (u.userIdentity && u.userIdentity.isFollowerOfAnchor));
+  }
+  // Fan Club: tiktok-live-proto menyimpan info klub di user.fansClubInfo /
+  // user.fansClub.data (level, clubName, userFansClubStatus: 0 = belum join).
+  if (u.isFanClub || u.isFansClubMember) return true;
+  const fc = u.fansClubInfo || u.fansClub || u.fansClubData || (data && data.fansClubInfo);
+  if (!fc) return false;
+  const d = fc.data || fc;
+  const status = d.userFansClubStatus;
+  if (status !== undefined && status !== null && Number(status) === 0) return false;
+  const level = Number(d.level != null ? d.level : d.fansLevel);
+  if (Number.isFinite(level) && level > 0) return true;
+  return Number(status) === 1 || !!(d.clubName || d.fansClubName);
+}
+
+/** Ambil foto profil asli dari payload user TikTok (ImageModel → urlList). */
+function joinAvatarUrl(u) {
+  if (!u) return null;
+  const fromImage = (img) => {
+    if (typeof img === 'string') return img.trim() || null;
+    if (Array.isArray(img)) return img.find((x) => typeof x === 'string' && x.trim()) || null;
+    if (img && Array.isArray(img.urlList)) return img.urlList.find((x) => typeof x === 'string' && x.trim()) || null;
+    return null;
+  };
+  const url = fromImage(u.avatarLarge) || fromImage(u.avatarMedium) ||
+              fromImage(u.avatarThumb) || fromImage(u.avatarLarger) ||
+              u.avatarUrl || u.avatar || null;
+  return safeUrl(url);
+}
+
+/** Suara soundboard yang dipilih di halaman Join Alert. */
+function joinSoundPayload(cfg) {
+  const s = cfg && cfg.sound;
+  if (!s || !s.url) return null;
+  const url = safeUrl(s.url);
+  if (!url) return null;
+  const name = String(s.name || 'Suara join').replace(/[<>\r\n\t]/g, '').trim().slice(0, 80) || 'Suara join';
+  return { name, url, source: String(s.source || 'myinstants').slice(0, 40) };
+}
+
+function joinVolume(cfg) {
+  const n = Number(cfg && cfg.volume);
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 100;
+}
+
+function joinDurationMs(cfg) {
+  const n = Number(cfg && cfg.duration);
+  const sec = Number.isFinite(n) ? Math.min(30, Math.max(1, n)) : 5;
+  return Math.round(sec * 1000);
+}
+
+function joinRejoinMinutes(cfg) {
+  const n = Number(cfg && cfg.rejoinMinutes);
+  return Number.isFinite(n) ? Math.min(1440, Math.max(0, n)) : 2;
+}
+
+/* Riwayat join + jeda join ulang. seen menyimpan waktu alert terakhir per user
+ * (bukan waktu join terakhir) supaya user yang bolak-balik join tidak membuat
+ * cooldown-nya terus resets. */
+const JOIN_HISTORY_LIMIT = 100;
+let joinAlertSeen = null;
+
+function joinAlertHistory() {
+  return Array.isArray(state.joinAlertHistory) ? state.joinAlertHistory : [];
+}
+
+function joinSeen() {
+  if (!joinAlertSeen) {
+    joinAlertSeen = new Map();
+    joinAlertHistory().forEach((e) => {
+      if (e && e.alerted && e.key) {
+        joinAlertSeen.set(e.key, Math.max(joinAlertSeen.get(e.key) || 0, Number(e.at) || 0));
+      }
+    });
+  }
+  return joinAlertSeen;
+}
+
+/* TikTok v2.5 mengirim u.id sebagai angka (userId), bukan @username. Handle asli
+ * ada di uniqueId/displayId (legacy di-flat ke event). Jangan pernah pakai id
+ * numerik sebagai username di history. */
+function joinHandle(u, data) {
+  const sources = [u, data, u && u.user, data && data.user];
+  const keys = ['uniqueId', 'displayId', 'username', 'userName', 'handle', 'userHandle', 'customId', 'unique_id', 'display_id'];
+  for (const src of sources) {
+    if (!src || typeof src !== 'object') continue;
+    for (const k of keys) {
+      const raw = String(src[k] == null ? '' : src[k]).trim().replace(/^@+/, '').slice(0, 60);
+      if (raw && !/^\d+$/.test(raw) && /^[A-Za-z0-9._]+$/.test(raw)) return raw;
+    }
+  }
+  return '';
+}
+
+function joinIdentity(u, data) {
+  const handle = joinHandle(u, data);
+  const nickname = String(u.nickname || handle || 'viewer').trim().slice(0, 60) || 'viewer';
+  const username = handle;
+  const key = String(u.id || u.uniqueId || u.userId || handle || nickname).trim().toLowerCase();
+  const isFollower = !!(u.isFollower ||
+    (data && data.userIdentity && data.userIdentity.isFollowerOfAnchor) ||
+    (u.userIdentity && u.userIdentity.isFollowerOfAnchor));
+  return { nickname, username, key, isFollower };
+}
+
+function pushJoinHistory(entry) {
+  const next = [entry].concat(joinAlertHistory()).slice(0, JOIN_HISTORY_LIMIT);
+  state.joinAlertHistory = next;
+  saveState();
+  broadcast('state', { key: 'joinAlertHistory', value: next });
+}
+
+/** Event join TikTok (v2.5: 'member') → kartu alert di overlay. */
+function processJoinAlert(data) {
+  const cfg = state.joinAlertCfg || {};
+  // Tombol Enable di dashboard: kalau mati, tidak ada alert dan tidak ada history.
+  if (cfg.enabled === false) return;
+  const who = cfg.who || 'all';
+
+  const u = getUser(data) || {};
+  const id = joinIdentity(u, data);
+  const now = Date.now();
+  const everJoined = joinAlertHistory().some((e) => e && e.key === id.key);
+  const seen = joinSeen();
+  const lastAlert = seen.get(id.key) || 0;
+  const minutes = joinRejoinMinutes(cfg);
+  // Riwayat tetap mencatat semua orang yang join, walaupun filter alert
+  // (Semua/Follower/Fan Club) atau jeda join ulang membuat alertnya dilewati.
+  const onCooldown = !!lastAlert && minutes > 0 && (now - lastAlert) < minutes * 60000;
+  const skipped = onCooldown || !joinWhoMatches(who, data);
+
+  const status = id.isFollower ? 'follower' : (everJoined ? 'repeat' : 'new');
+  pushJoinHistory({
+    key: id.key,
+    nickname: id.nickname,
+    username: id.username,
+    status,
+    isFollower: id.isFollower,
+    joinedBefore: everJoined,
+    alerted: !skipped,
+    at: now
+  });
+  if (skipped) return;
+  seen.set(id.key, now);
+
+  broadcastJoinAlert({
+    name: id.nickname,
+    avatar: joinAvatarUrl(u),
+    who,
+    sound: cfg.soundOn === false ? null : joinSoundPayload(cfg),
+    volume: joinVolume(cfg),
+    durationMs: joinDurationMs(cfg),
+    test: false,
+    at: now
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Follow Alert — kartu saat ada yang follow live yang terhubung       */
+/* ------------------------------------------------------------------ */
+
+// Kirim hanya ke overlay followalert (preview ikut menerima meski tidak presence).
+function broadcastFollowAlert(payload) {
+  broadcast('followalert', payload, (c) => c.role === 'overlay' && c.id === 'followalert');
+}
+
+/** Suara soundboard yang dipilih di halaman Follow Alert. */
+function followSoundPayload(cfg) {
+  const s = cfg && cfg.sound;
+  if (!s || !s.url) return null;
+  const url = safeUrl(s.url);
+  if (!url) return null;
+  const name = String(s.name || 'Suara follow').replace(/[<>\r\n\t]/g, '').trim().slice(0, 80) || 'Suara follow';
+  return { name, url, source: String(s.source || 'myinstants').slice(0, 40) };
+}
+
+function followVolume(cfg) {
+  const n = Number(cfg && cfg.volume);
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 100;
+}
+
+function followDurationMs(cfg) {
+  const n = Number(cfg && cfg.duration);
+  const sec = Number.isFinite(n) ? Math.min(30, Math.max(1, n)) : 5;
+  return Math.round(sec * 1000);
+}
+
+/* Riwayat follow (maksimal 100 entri terakhir). Setiap event follow langsung
+ * memicu alert — tanpa jeda/cooldown. */
+const FOLLOW_HISTORY_LIMIT = 100;
+
+function followAlertHistory() {
+  return Array.isArray(state.followAlertHistory) ? state.followAlertHistory : [];
+}
+
+/* Pakai parser handle yang sama dengan Join Alert: u.id dari TikTok v2.5
+ * berupa angka, jangan pernah dipakai sebagai @username di history. */
+function followIdentity(u, data) {
+  const handle = joinHandle(u, data);
+  const nickname = String(u.nickname || handle || 'viewer').trim().slice(0, 60) || 'viewer';
+  const username = handle;
+  const key = String(u.id || u.uniqueId || u.userId || handle || nickname).trim().toLowerCase();
+  return { nickname, username, key };
+}
+
+function pushFollowHistory(entry) {
+  const next = [entry].concat(followAlertHistory()).slice(0, FOLLOW_HISTORY_LIMIT);
+  state.followAlertHistory = next;
+  saveState();
+  broadcast('state', { key: 'followAlertHistory', value: next });
+}
+
+/** Event follow TikTok → kartu alert di overlay. */
+function processFollowAlert(data) {
+  const cfg = state.followAlertCfg || {};
+  // Tombol Enable di dashboard: kalau mati, tidak ada alert dan tidak ada history.
+  if (cfg.enabled === false) return;
+
+  const u = getUser(data) || {};
+  const id = followIdentity(u, data);
+  const now = Date.now();
+  const everFollowed = followAlertHistory().some((e) => e && e.key === id.key);
+
+  pushFollowHistory({
+    key: id.key,
+    nickname: id.nickname,
+    username: id.username,
+    status: everFollowed ? 'repeat' : 'new',
+    followedBefore: everFollowed,
+    alerted: true,
+    at: now
+  });
+
+  broadcastFollowAlert({
+    name: id.nickname,
+    // Helper joinAvatarUrl dipakai bareng: ekstrak urlList dari ImageModel TikTok.
+    avatar: joinAvatarUrl(u),
+    sound: cfg.soundOn === false ? null : followSoundPayload(cfg),
+    volume: followVolume(cfg),
+    durationMs: followDurationMs(cfg),
+    test: false,
+    at: now
+  });
 }
 
 // Kirim state tiktok (connected/disconnected) ke semua client termasuk overlay
@@ -2354,6 +2755,7 @@ async function fireKeystrokes(lines) {
 }
 
 function tiktokCleanup() {
+  tiktokConnectedAt = 0;
   if (liveSession) finishLiveSession(true);
   if (tiktokClient) {
     try { tiktokClient.disconnect(); } catch (_) {}
@@ -2382,6 +2784,7 @@ async function tiktokConnect(req, res) {
   tiktokUser = raw;
   tiktokState = 'connecting';
   tiktokError = '';
+  tiktokConnectedAt = 0;
   startLiveSession(raw);
   broadcastTiktok('connecting', { username: raw });
   json(res, 200, { ok: true, username: raw }); // jawab request segera, connect async
@@ -2398,6 +2801,7 @@ async function tiktokConnect(req, res) {
         if (tiktokClient === client) {
           finishLiveSession(true);
           tiktokState = 'offline';
+          tiktokConnectedAt = 0;
           tiktokUser = '';
           tiktokClient = null;
           resetLiveAccumulators();
@@ -2419,6 +2823,7 @@ async function tiktokConnect(req, res) {
           if (tiktokState === 'online') finishLiveSession(true);
           tiktokError = msg;
           tiktokState = 'error';
+          tiktokConnectedAt = 0;
         }
         broadcastTiktok('error', { username: raw, message: msg });
         broadcastTiktokState();
@@ -2439,12 +2844,22 @@ async function tiktokConnect(req, res) {
       if (ev === 'chat')      processSubathonEvent('comment', data || {});
       if (ev === 'subscribe') processSubathonEvent('subscribe', data || {});
       if (ev === 'member')    processSubathonEvent('follow', data || {}); // v2.5 join as member
-      // Proses command musik dari komentar
-      if (ev === 'chat') processMusicCommand(data || {});
+      // Join Alert — kartu overlay saat penonton join (sudah termasuk filter who)
+      if (ev === 'member' || ev === 'join') processJoinAlert(data || {});
+      // Follow Alert — kartu overlay saat ada yang follow live yang terhubung
+      if (ev === 'follow') processFollowAlert(data || {});
+      // Komentar lama yang dikirim ulang TikTok saat connect tidak boleh memicu
+      // musik (!play/!skip) maupun dibacakan TTS.
+      const afterConnect = ev === 'chat' ? chatAfterConnect(data || {}) : true;
+      if (ev === 'chat' && afterConnect) processMusicCommand(data || {});
       // Jalankan aktivitas yang cocok
       runActivities(ev, data || {});
-      // Kirim event ke semua dashboard client via SSE
-      broadcastTiktok(ev, { username: raw, data });
+      // Kirim event ke semua dashboard client via SSE.
+      broadcastTiktok(ev, {
+        username: raw,
+        data,
+        afterConnect: ev === 'chat' ? afterConnect : undefined
+      });
       // Kirim komentar live ke overlay chat
       if (ev === 'chat') broadcastChatToOverlay({ username: raw, data });
     });
@@ -2455,6 +2870,7 @@ async function tiktokConnect(req, res) {
     if (tiktokClient !== client) return; // sudah di-disconnect saat proses
     applyRoomMeta((connState && connState.roomInfo) || client.roomInfo);
     tiktokState = 'online';
+    tiktokConnectedAt = Date.now();
     tiktokError = '';
     broadcastTiktok('connected', { username: raw });
     broadcastTiktokState();
@@ -2468,6 +2884,7 @@ async function tiktokConnect(req, res) {
     console.warn('[tiktok] gagal connect ke @' + raw + ':', msg);
     if (tiktokClient === client) {
       tiktokState = 'error';
+      tiktokConnectedAt = 0;
       tiktokError = msg;
       tiktokClient = null;
     }
@@ -2808,6 +3225,7 @@ let musicPaused = false;
 let musicVolume = 100; // 0-100, dipakai semua player YouTube (dashboard + overlay)
 let musicSeqId = 0;
 let musicTickTimer = null;
+let musicProgressAt = 0; // laporan terakhir dari player dashboard (sumber audio)
 
 /** Konfigurasi musik — diambil dari state.music (disimpan dashboard). */
 function getMusicCfg() {
@@ -2852,6 +3270,10 @@ function musicTickStart() {
     // Jeda: elapsed dibekukan supaya tidak auto-skip saat lagu dipause.
     // Status pause sudah disiarkan sekali oleh /api/music/control.
     if (musicPaused) return;
+    // Player dashboard mengirim getCurrentTime() tiap detik. Sebelum laporan
+    // pertama (player belum PLAYING) detik TIDAK boleh jalan, dan selama
+    // laporan masih segar tick cadangan tidak boleh menimpa posisi asli video.
+    if (!musicProgressAt || Date.now() - musicProgressAt < 3000) return;
     musicElapsed += 1;
     // Jika durasi diketahui dan sudah habis, skip otomatis
     if (musicNowPlaying.dur > 0 && musicElapsed >= musicNowPlaying.dur) {
@@ -2876,6 +3298,7 @@ function musicPlayNext() {
   const item = musicQueue.shift();
   musicNowPlaying = Object.assign({}, item, { startedAt: Date.now() });
   musicElapsed = 0;
+  musicProgressAt = 0;
   musicPaused = false; // lagu baru selalu mulai diputar (tidak ikut status jeda sebelumnya)
   broadcastMusicState();
   musicTickStart();
@@ -2922,6 +3345,7 @@ function musicSkip(user, autoSkip) {
   const prev = musicNowPlaying;
   musicNowPlaying = null;
   musicElapsed = 0;
+  musicProgressAt = 0;
   musicTickStop();
   broadcast('musicskip', { skippedUid: prev.uid, by: user || null, auto: !!autoSkip });
   // Tunda sedikit agar overlay sempat menerima stop sebelum lagu berikutnya
@@ -3022,7 +3446,7 @@ function processMusicCommand(data) {
   }
 }
 
-/** Update durasi lagu yang sedang diputar (dikirim dari iframe YouTube di overlay/dashboard). */
+/** Update durasi lagu (kompatibilitas lama; sekarang durasi ikut /api/music/progress). */
 function musicSetDuration(uid, dur) {
   if (musicNowPlaying && musicNowPlaying.uid === uid) {
     const wasFirstReport = musicNowPlaying.dur === 0;
@@ -3036,7 +3460,26 @@ function musicSetDuration(uid, dur) {
   }
 }
 
-/** Update judul lagu yang sedang diputar dengan judul asli dari YouTube (dikirim dari iframe YouTube di overlay). */
+/**
+ * Terima posisi putar dari player dashboard (satu-satunya sumber audio).
+ * Overlay tidak memutar YouTube; ia hanya menampilkan elapsed dari server,
+ * jadi angka detik di dashboard dan overlay selalu sama.
+ */
+function musicSetProgress(uid, elapsed, dur) {
+  if (!musicNowPlaying || String(uid || '') !== musicNowPlaying.uid) return;
+  musicProgressAt = Date.now();
+  const sec = Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
+  const d = Number.isFinite(dur) && dur > 0 ? dur : musicNowPlaying.dur;
+  if (d > 0 && d !== musicNowPlaying.dur) musicNowPlaying.dur = d;
+  musicElapsed = d > 0 ? Math.min(sec, d) : sec;
+  if (d > 0 && musicElapsed >= d - 0.25) {
+    musicSkip(null, true); // video selesai — lanjut ke antrean berikutnya
+    return;
+  }
+  broadcastMusicState();
+}
+
+/** Update judul lagu yang sedang diputar dengan judul asli dari YouTube (dikirim dari player dashboard). */
 function musicSetTitle(uid, title) {
   if (musicNowPlaying && musicNowPlaying.uid === uid && title) {
     musicNowPlaying.title = title;
