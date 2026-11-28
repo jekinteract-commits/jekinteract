@@ -25,14 +25,15 @@ import followAlert from './pages/followAlert.js';
 import gifters from './pages/gifters.js';
 import goals from './pages/goals.js';
 import settings from './pages/settings.js';
+import customSocialbuzz from './pages/customSocialbuzz.js';
 
-const PAGES = [dashboard, analytics, connection, interaksi, gifts, music, tts, subathon, winlose, likes, chat, joinAlert, followAlert, gifters, goals, settings];
+const PAGES = [dashboard, analytics, connection, interaksi, gifts, music, tts, subathon, winlose, likes, chat, joinAlert, followAlert, customSocialbuzz, gifters, goals, settings];
 const BY_ID = Object.fromEntries(PAGES.map((p) => [p.id, p]));
 const GROUPS = [
   { name: 'Selamat Datang', ids: ['dashboard', 'analytics'] },
   { name: 'Setup', ids: ['connection', 'interaksi', 'gifts'] },
   { name: 'Tools', ids: ['music', 'tts', 'subathon', 'winlose'] },
-  { name: 'Overlays', ids: ['likes', 'chat', 'joinalert', 'followalert', 'gifters', 'goals'] }
+  { name: 'Overlays', ids: ['likes', 'chat', 'joinalert', 'followalert', 'customsocialbuzz', 'gifters', 'goals'] }
 ];
 
 /* ---------------------------- Shell ---------------------------- */

@@ -416,3 +416,54 @@ code { font: 600 13px var(--f-ui); color: var(--cyan); background: rgba(41, 243,
 .addrs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
 .trg-b > .btn { align-self: flex-start; }
+
+/* ---------- Custom Socialbuzz ---------- */
+.csb-oneline > div { min-width: 0; flex: 1; line-height: 1.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.csb-steps { display: flex; flex-direction: column; gap: 14px; }
+.csb-step { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border: 1px solid var(--line); background: var(--ink-0); }
+.csb-step-n { flex: 0 0 34px; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(56, 189, 248, .45); color: var(--cyan); font: 800 14px var(--f-display); background: rgba(56, 189, 248, .08); }
+.csb-step-b { min-width: 0; flex: 1; }
+.csb-step-b > b, .csb-step-title { display: block; font: 800 16px var(--f-display); color: var(--txt-1); margin-bottom: 4px; letter-spacing: .03em; }
+.csb-step-b p b { display: inline; font-weight: 700; color: var(--txt-1); }
+.csb-step-b p { margin: 0; color: var(--txt-2); font-size: 13px; line-height: 1.65; }
+.csb-list { margin: 10px 0 0; padding-left: 18px; color: var(--txt-2); font-size: 13px; line-height: 1.7; }
+.csb-list li + li { margin-top: 4px; }
+.csb-list b { color: var(--txt-1); }
+
+.csb-scroll { max-height: min(72vh, 760px); overflow-y: auto; overflow-x: hidden; padding-right: 4px; display: block; }
+.csb-scroll::-webkit-scrollbar { width: 10px; }
+.csb-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border: 2px solid transparent; background-clip: padding-box; }
+
+.csb-card { display: block; width: 100%; margin-bottom: 16px; border: 1px solid var(--line-2); background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)), var(--ink-0); overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.csb-card:last-child { margin-bottom: 0; }
+.csb-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.csb-card-title { display: flex; align-items: center; gap: 8px; min-width: 0; font: 700 14px var(--f-display); color: var(--txt-1); letter-spacing: .04em; }
+.csb-card-title svg { width: 16px; height: 16px; flex: 0 0 auto; color: var(--cyan); }
+.csb-card-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.csb-picked { display: none; flex: 0 0 auto; padding: 4px 10px; border: 1px solid rgba(56,189,248,.45); color: var(--cyan); font: 700 11px var(--f-display); letter-spacing: .04em; background: rgba(56,189,248,.08); }
+.csb-card.is-selected .csb-picked { display: inline-flex; align-items: center; }
+
+.csb-preview { position: relative; padding: 14px; min-height: 280px; background:
+  linear-gradient(45deg, rgba(255,255,255,.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.04) 75%, rgba(255,255,255,.04)),
+  linear-gradient(45deg, rgba(255,255,255,.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.04) 75%, rgba(255,255,255,.04));
+  background-position: 0 0, 10px 10px; background-size: 20px 20px; background-color: #0f0a24; }
+.csb-preview iframe { display: block; width: 100%; height: 320px; border: 0; background: transparent; color-scheme: normal; }
+
+.csb-actions { display: flex !important; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border-top: 1px solid var(--line); background: rgba(7,5,18,.72); }
+.csb-actions .btn { min-width: 140px; justify-content: center; }
+.csb-copy-html { --bd: rgba(56,189,248,.65); --bg: rgba(56,189,248,.10); color: var(--cyan); }
+.csb-copy-html:hover { --bd: rgba(56,189,248,.95); --bg: rgba(56,189,248,.18); color: #fff; filter: none; }
+.csb-copy-css { --bd: rgba(255,79,216,.65); --bg: rgba(255,79,216,.10); color: var(--mag); }
+.csb-copy-css:hover { --bd: rgba(255,79,216,.95); --bg: rgba(255,79,216,.18); color: #fff; filter: none; }
+
+.csb-card.is-selected { border-color: rgba(56,189,248,.65); box-shadow: 0 0 0 1px rgba(56,189,248,.25), 0 12px 28px rgba(0,0,0,.22); }
+.csb-card.is-selected .csb-card-title { color: var(--cyan); }
+
+@media (max-width: 700px) {
+  .csb-scroll { max-height: none; padding-right: 0; }
+  .csb-step { padding: 12px; gap: 10px; }
+  .csb-step-b > b, .csb-step-title { font-size: 15px; }
+  .csb-preview { min-height: 240px; padding: 10px; }
+  .csb-preview iframe { height: 260px; }
+  .csb-actions .btn { flex: 1 1 120px; min-width: 0; }
+}

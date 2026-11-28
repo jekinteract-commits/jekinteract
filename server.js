@@ -952,6 +952,27 @@ async function api(req, res, pathname, q) {
     } catch (_) {}
     return json(res, 200, { ok: true });
   }
+
+  if (pathname === '/api/sobuz/themes' && m === 'GET') {
+    const dir = path.join(ROOT, 'Sobuz', 'Code');
+    let files = [];
+    try { files = fs.readdirSync(dir); } catch (_) { return json(res, 200, { ok: true, themes: [] }); }
+    const htmlFiles = files.filter((f) => /\.html$/i.test(f));
+    const themes = htmlFiles.map((f) => {
+      const id = f.replace(/\.html$/i, '');
+      const htmlPath = path.join(dir, f);
+      const cssPath = path.join(dir, id + '.css');
+      let html = '';
+      let css = '';
+      try { html = fs.readFileSync(htmlPath, 'utf8'); } catch (_) {}
+      try { css = fs.readFileSync(cssPath, 'utf8'); } catch (_) {}
+      const name = id.replace(/^\d+\./, '').replace(/_/g, ' ').trim();
+      const num = parseInt(id, 10);
+      return { id, name, num: Number.isFinite(num) ? num : 999, html, css };
+    }).sort((a, b) => a.num - b.num || a.name.localeCompare(b.name));
+    return json(res, 200, { ok: true, themes });
+  }
+
   if (pathname === '/api/status' && m === 'GET') return json(res, 200, statusPayload());
   if (pathname === '/api/state' && m === 'GET') return json(res, 200, state);
 
