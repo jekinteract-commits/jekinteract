@@ -122,3 +122,7 @@
 
 /* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
 .pixel-header > span + span { margin-left: 8px; }
+
+/* Added: synced theme image refs */
+.theme-badge-icon { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+.theme-watermark { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); width: 130px; height: 130px; opacity: 0.14; pointer-events: none; z-index: 1; }
