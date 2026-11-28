@@ -1,0 +1,160 @@
+/* StreamAlert Studio - One Piece | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700&family=Rye&display=swap");
+.pirate-alert-wrapper, .pirate-alert-wrapper *, .pirate-alert-wrapper *::before, .pirate-alert-wrapper *::after { box-sizing: border-box; }
+
+.pirate-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  animation: pirateWantedDrop 0.65s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+
+.pirate-badge {
+  position: absolute;
+  top: 0px;
+  left: 20px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #C92A2A;
+  color: #FFFFFF;
+  border: 2px solid #5C3D2E;
+  padding: 4px 14px 4px 10px;
+  border-radius: 4px;
+  box-shadow: 0 4px 15px rgba(201, 42, 42, 0.5);
+  transform: rotate(-2deg);
+}
+
+.pirate-badge-text {
+  font-family: 'Rye', cursive, serif;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.pirate-star { color: #F59E0B; }
+
+.pirate-alert-card {
+  position: relative;
+  background: #FBF2DC;
+  border: 3px solid #5C3D2E;
+  border-radius: 10px;
+  padding: 22px 28px;
+  min-height: 105px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(180, 83, 9, 0.2);
+  overflow: hidden;
+}
+
+.pirate-watermark {
+  position: absolute;
+  right: 25px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 120px;
+  height: 120px;
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.pirate-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.pirate-header {
+  font-size: 24px;
+  line-height: 1.25;
+  margin-bottom: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pirate-berry {
+  font-family: 'Rye', cursive, serif;
+  color: #B45309;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.pirate-amount {
+  font-family: 'Rye', cursive, serif;
+  color: #C92A2A;
+  font-size: 26px;
+  letter-spacing: 1px;
+  text-shadow: 1px 1px 0 #5C3D2E;
+}
+
+.pirate-from {
+  color: #78350F;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.pirate-supporter {
+  font-family: 'Rye', cursive, serif;
+  color: #1C1917;
+  font-size: 22px;
+}
+
+.pirate-message {
+  color: #261E14;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  background: rgba(180, 83, 9, 0.12);
+  border: 1px dashed #B45309;
+  padding: 4px 16px;
+  border-radius: 6px;
+}
+
+/* Animations used by this theme only */
+@keyframes pirateWantedDrop {
+  0% { opacity: 0; transform: translateY(-25px) rotate(-3deg); }
+  100% { opacity: 1; transform: translateY(0) rotate(0deg); }
+}
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.pirate-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.pirate-content .media[src=""],
+.pirate-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.pirate-amount, .pirate-supporter, .pirate-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.pirate-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.pirate-header > span + span { margin-left: 8px; }

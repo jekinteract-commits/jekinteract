@@ -1,0 +1,78 @@
+/* StreamAlert Studio - Horor Malam Jumat | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=Cinzel:wght@400;600;800&display=swap");
+.horror-alert-wrapper, .horror-alert-wrapper *, .horror-alert-wrapper *::before, .horror-alert-wrapper *::after { box-sizing: border-box; }
+
+.horror-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  animation: horrorAlertIn 0.8s ease-in-out forwards;
+}
+.horror-badge {
+  position: absolute;
+  top: 0px;
+  left: 20px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #070B0E;
+  color: #D97706;
+  border: 1.5px solid #134E4A;
+  padding: 4px 14px 4px 10px;
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(19, 78, 74, 0.6);
+}
+.horror-badge-text { font-family: 'Cinzel', serif; font-size: 12px; font-weight: 800; letter-spacing: 0.8px; }
+.horror-alert-card {
+  position: relative;
+  background: linear-gradient(135deg, #070B0E 0%, #111A20 100%);
+  border: 1.5px solid #134E4A;
+  border-radius: 10px;
+  padding: 22px 26px 18px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.9), 0 0 30px rgba(19, 78, 74, 0.35);
+  overflow: hidden;
+}
+.horror-content { position: relative; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+.horror-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.horror-amount { font-family: 'Cinzel', serif; font-size: 26px; font-weight: 800; color: #D97706; }
+.horror-from { font-size: 13px; font-weight: 600; color: #94A3B8; }
+.horror-supporter { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; color: #E2E8F0; }
+.horror-message { font-size: 14px; color: #CBD5E1; background: rgba(0, 0, 0, 0.55); padding: 8px 14px; border-radius: 6px; border-left: 3px solid #134E4A; }
+@keyframes horrorAlertIn { 0% { opacity: 0; filter: blur(10px); } 100% { opacity: 1; filter: blur(0); } }
+
+/* Shared SVG badge and watermark helpers used by themes 11–22 */
+.theme-badge-icon { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+.theme-watermark { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); width: 130px; height: 130px; opacity: 0.14; pointer-events: none; z-index: 1; }
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.horror-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.horror-content .media[src=""],
+.horror-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.horror-amount, .horror-supporter, .horror-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.horror-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.horror-header > span + span { margin-left: 8px; }

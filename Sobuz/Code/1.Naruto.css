@@ -1,0 +1,211 @@
+/* StreamAlert Studio - Naruto | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700&family=Bangers&display=swap");
+.naruto-alert-wrapper, .naruto-alert-wrapper *, .naruto-alert-wrapper *::before, .naruto-alert-wrapper *::after { box-sizing: border-box; }
+
+.naruto-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  animation: jutsuSummon 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+
+.naruto-badge {
+  position: absolute;
+  top: 0px;
+  left: 18px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #FF6600 0%, #FF8C00 100%);
+  color: #FFFFFF;
+  border: 2px solid #FFFFFF;
+  padding: 4px 14px 4px 10px;
+  border-radius: 6px;
+  box-shadow: 0 4px 15px rgba(255, 102, 0, 0.5);
+  transform: rotate(-3deg);
+  pointer-events: none;
+}
+
+.naruto-badge-img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 4px #FF7300);
+}
+
+.naruto-badge-text {
+  font-family: 'Bangers', cursive, sans-serif;
+  font-size: 15px;
+  letter-spacing: 1.5px;
+  line-height: 1;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.naruto-shuriken {
+  font-size: 12px;
+  color: #00D2FF;
+  animation: shurikenSpin 1.8s infinite linear;
+}
+
+.chakra-flame {
+  position: absolute;
+  pointer-events: none;
+  z-index: 20;
+  user-select: none;
+}
+
+.flame-1 {
+  top: 12px;
+  right: 50px;
+  font-size: 18px;
+  animation: chakraPulse 2s infinite ease-in-out;
+}
+
+.flame-2 {
+  bottom: 8px;
+  left: 45px;
+  font-size: 16px;
+  animation: chakraPulse 2.4s infinite ease-in-out 0.6s;
+}
+
+.naruto-alert-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(20, 16, 14, 0.98) 0%, rgba(35, 23, 16, 0.95) 50%, rgba(15, 12, 10, 0.98) 100%);
+  border: 2px solid #FF7300;
+  border-left: 6px solid #FF6600;
+  border-right: 6px solid #00D2FF;
+  border-radius: 14px;
+  padding: 22px 28px;
+  min-height: 105px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(255, 115, 0, 0.3), inset 0 0 15px rgba(255, 115, 0, 0.1);
+  overflow: hidden;
+}
+
+.naruto-watermark {
+  position: absolute;
+  right: 35px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 140px;
+  height: 140px;
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.naruto-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.naruto-header {
+  font-size: 24px;
+  line-height: 1.25;
+  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.naruto-amount {
+  font-family: 'Bangers', cursive, sans-serif;
+  color: #FF9100;
+  font-size: 26px;
+  letter-spacing: 1.5px;
+  text-shadow: 0 0 15px rgba(255, 145, 0, 0.7), 2px 2px 0 #000;
+}
+
+.naruto-from {
+  color: #CFC7BE;
+  font-weight: 700;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.naruto-supporter {
+  font-family: 'Bangers', cursive, sans-serif;
+  color: #00D2FF;
+  font-size: 25px;
+  letter-spacing: 1px;
+  text-shadow: 0 0 14px rgba(0, 210, 255, 0.6), 2px 2px 0 #000;
+}
+
+.naruto-message {
+  color: #FFFFFF;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 115, 0, 0.12);
+  padding: 4px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 115, 0, 0.3);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.naruto-msg-icon { font-size: 16px; }
+
+/* Animations used by this theme only */
+@keyframes chakraPulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.25); opacity: 1; }
+}
+
+@keyframes jutsuSummon {
+  0% { opacity: 0; transform: scale(0.6) rotate(-5deg); filter: blur(6px); }
+  60% { transform: scale(1.04) rotate(2deg); filter: blur(0px); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+@keyframes shurikenSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.naruto-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.naruto-content .media[src=""],
+.naruto-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.naruto-amount, .naruto-supporter, .naruto-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.naruto-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.naruto-header > span + span { margin-left: 8px; }

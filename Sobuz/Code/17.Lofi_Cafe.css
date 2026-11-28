@@ -1,0 +1,78 @@
+/* StreamAlert Studio - Lofi Cafe | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Comfortaa:wght@400;600;700&display=swap");
+.lofi-alert-wrapper, .lofi-alert-wrapper *, .lofi-alert-wrapper *::before, .lofi-alert-wrapper *::after { box-sizing: border-box; }
+
+.lofi-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  animation: lofiAlertIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.lofi-badge {
+  position: absolute;
+  top: 0px;
+  left: 20px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #251814;
+  color: #D97706;
+  border: 1.5px solid #D97706;
+  padding: 4px 14px 4px 10px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(217, 119, 6, 0.35);
+}
+.lofi-badge-text { font-family: 'Comfortaa', cursive; font-size: 12px; font-weight: 700; }
+.lofi-alert-card {
+  position: relative;
+  background: linear-gradient(135deg, #251814 0%, #38241D 100%);
+  border: 1.5px solid #D97706;
+  border-radius: 20px;
+  padding: 22px 26px 18px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.7), 0 0 20px rgba(217, 119, 6, 0.2);
+  overflow: hidden;
+}
+.lofi-content { position: relative; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+.lofi-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.lofi-amount { font-family: 'Comfortaa', cursive; font-size: 24px; font-weight: 700; color: #F59E0B; }
+.lofi-from { font-size: 13px; font-weight: 600; color: #FED7AA; }
+.lofi-supporter { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; color: #FFF7ED; }
+.lofi-message { font-size: 14px; color: #FFF7ED; background: rgba(0, 0, 0, 0.3); padding: 8px 14px; border-radius: 10px; border-left: 3px solid #D97706; }
+@keyframes lofiAlertIn { 0% { opacity: 0; transform: translateY(15px); } 100% { opacity: 1; transform: translateY(0); } }
+
+/* Shared SVG badge and watermark helpers used by themes 11–22 */
+.theme-badge-icon { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+.theme-watermark { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); width: 130px; height: 130px; opacity: 0.14; pointer-events: none; z-index: 1; }
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.lofi-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.lofi-content .media[src=""],
+.lofi-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.lofi-amount, .lofi-supporter, .lofi-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.lofi-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.lofi-header > span + span { margin-left: 8px; }

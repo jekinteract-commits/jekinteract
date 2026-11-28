@@ -1,0 +1,173 @@
+/* StreamAlert Studio - Team Liquid | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800&family=Caveat:wght@400;600;700&display=swap");
+.liquid-alert-wrapper, .liquid-alert-wrapper *, .liquid-alert-wrapper *::before, .liquid-alert-wrapper *::after { box-sizing: border-box; }
+
+.liquid-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'DM Sans', sans-serif;
+  animation: alertSlideIn 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.liquid-badge {
+  position: absolute;
+  top: 0px;
+  left: 14px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: rotate(-7deg);
+  pointer-events: none;
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,0.7));
+}
+
+.liquid-badge-img {
+  width: 26px;
+  height: 30px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px rgba(59, 176, 212, 0.7));
+}
+
+.liquid-badge-script {
+  font-family: 'Caveat', cursive, sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  color: #FFFFFF;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.8), 0 0 10px rgba(255,255,255,0.4);
+  line-height: 1;
+}
+
+.sparkle-liq {
+  position: absolute;
+  pointer-events: none;
+  z-index: 15;
+  background: #F7C95E;
+  clip-path: polygon(50% 0%, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0% 50%, 37% 37%);
+  filter: drop-shadow(0 0 4px #F7C95E);
+  animation: sparkleTwinkle 2.4s infinite ease-in-out;
+}
+
+.sp-1 { top: 14px; left: 160px; width: 10px; height: 10px; animation-delay: 0.2s; }
+.sp-2 { top: -4px; right: 75px; width: 13px; height: 13px; animation-delay: 0.7s; }
+.sp-3 { bottom: 12px; right: 130px; width: 9px; height: 9px; animation-delay: 1.2s; }
+
+.liquid-alert-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(0, 21, 56, 0.96) 0%, rgba(2, 31, 80, 0.94) 55%, rgba(0, 15, 40, 0.98) 100%);
+  border: 1.5px solid rgba(59, 176, 212, 0.45);
+  border-radius: 20px;
+  padding: 22px 30px;
+  min-height: 105px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 25px rgba(59, 176, 212, 0.25);
+  overflow: hidden;
+}
+
+.liquid-watermark {
+  position: absolute;
+  right: 45px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 120px;
+  height: 85%;
+  object-fit: contain;
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.liquid-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.liquid-header {
+  font-size: 21px;
+  line-height: 1.25;
+  margin-bottom: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.liquid-amount {
+  color: #3BB0D4;
+  font-size: 24px;
+  font-weight: 800;
+  text-shadow: 0 0 14px rgba(59, 176, 212, 0.6), 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.liquid-from {
+  color: #EEEEEE;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.liquid-supporter {
+  color: #3BB0D4;
+  font-size: 24px;
+  font-weight: 800;
+  text-shadow: 0 0 12px rgba(59, 176, 212, 0.5), 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.liquid-message {
+  color: #EEEEEE;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.9);
+}
+
+/* Animations used by this theme only */
+@keyframes alertSlideIn {
+  0% { opacity: 0; transform: translateY(20px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes sparkleTwinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.6) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.2) rotate(45deg); }
+}
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.liquid-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.liquid-content .media[src=""],
+.liquid-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.liquid-amount, .liquid-supporter, .liquid-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.liquid-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.liquid-header > span + span { margin-left: 8px; }

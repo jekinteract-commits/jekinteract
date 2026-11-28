@@ -1,0 +1,78 @@
+/* StreamAlert Studio - Mobile Legends | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Cinzel:wght@400;600;700;800&display=swap");
+.mlbb-alert-wrapper, .mlbb-alert-wrapper *, .mlbb-alert-wrapper *::before, .mlbb-alert-wrapper *::after { box-sizing: border-box; }
+
+.mlbb-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  animation: mlbbAlertIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.mlbb-badge {
+  position: absolute;
+  top: 0px;
+  left: 20px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0B0E28;
+  color: #F59E0B;
+  border: 1.5px solid #F59E0B;
+  padding: 4px 14px 4px 10px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.4);
+}
+.mlbb-badge-text { font-family: 'Cinzel', serif; font-size: 13px; font-weight: 700; letter-spacing: 0.8px; }
+.mlbb-alert-card {
+  position: relative;
+  background: linear-gradient(135deg, #0B0E28 0%, #171A42 100%);
+  border: 1.5px solid #F59E0B;
+  border-radius: 16px;
+  padding: 22px 26px 18px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8), 0 0 25px rgba(245, 158, 11, 0.25);
+  overflow: hidden;
+}
+.mlbb-content { position: relative; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+.mlbb-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.mlbb-amount { font-family: 'Cinzel', serif; font-size: 26px; font-weight: 800; color: #F59E0B; }
+.mlbb-from { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.6); }
+.mlbb-supporter { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; color: #FFFFFF; }
+.mlbb-message { font-size: 14px; color: #F8FAFC; background: rgba(0, 0, 0, 0.35); padding: 8px 14px; border-radius: 8px; border-left: 3px solid #F59E0B; }
+@keyframes mlbbAlertIn { 0% { opacity: 0; transform: translateY(-20px) scale(0.92); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+
+/* Shared SVG badge and watermark helpers used by themes 11–22 */
+.theme-badge-icon { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+.theme-watermark { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); width: 130px; height: 130px; opacity: 0.14; pointer-events: none; z-index: 1; }
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.mlbb-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.mlbb-content .media[src=""],
+.mlbb-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.mlbb-amount, .mlbb-supporter, .mlbb-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.mlbb-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.mlbb-header > span + span { margin-left: 8px; }

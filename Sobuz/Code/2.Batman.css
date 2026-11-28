@@ -1,0 +1,175 @@
+/* StreamAlert Studio - Batman | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Teko:wght@400;500;600;700&display=swap");
+.batman-alert-wrapper, .batman-alert-wrapper *, .batman-alert-wrapper *::before, .batman-alert-wrapper *::after { box-sizing: border-box; }
+
+.batman-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Montserrat', sans-serif;
+  animation: batSwoopIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.batman-badge {
+  position: absolute;
+  top: 0px;
+  left: 20px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #FFE600;
+  color: #08090C;
+  padding: 4px 14px 4px 10px;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  box-shadow: 0 4px 15px rgba(255, 230, 0, 0.5);
+  pointer-events: none;
+}
+
+.batman-badge-text {
+  font-family: 'Teko', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  line-height: 1;
+}
+
+.bat-searchlight {
+  position: absolute;
+  top: -60px;
+  right: 80px;
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, rgba(255, 230, 0, 0.18) 0%, transparent 65%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+  animation: searchlightSweep 4s infinite ease-in-out;
+}
+
+.batman-alert-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(8, 9, 12, 0.98) 0%, rgba(18, 22, 30, 0.95) 50%, rgba(6, 7, 9, 0.98) 100%);
+  border: 1.5px solid rgba(255, 230, 0, 0.5);
+  border-bottom: 4px solid #FFE600;
+  clip-path: polygon(0 10px, 10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px));
+  padding: 22px 30px;
+  min-height: 105px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.9), 0 0 25px rgba(255, 230, 0, 0.15);
+  overflow: hidden;
+}
+
+.batman-watermark {
+  position: absolute;
+  right: 35px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 150px;
+  height: 90px;
+  opacity: 0.1;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.batman-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.batman-header {
+  font-size: 26px;
+  line-height: 1.25;
+  margin-bottom: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.batman-amount {
+  font-family: 'Teko', sans-serif;
+  color: #FFE600;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-shadow: 0 0 16px rgba(255, 230, 0, 0.7);
+}
+
+.batman-from {
+  color: #94A3B8;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-weight: 600;
+}
+
+.batman-supporter {
+  font-family: 'Teko', sans-serif;
+  color: #FFFFFF;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+}
+
+.batman-message {
+  color: #E2E8F0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+  background: rgba(255, 230, 0, 0.08);
+  border-left: 3px solid #FFE600;
+  padding: 4px 16px;
+}
+
+/* Animations used by this theme only */
+@keyframes batSwoopIn {
+  0% { opacity: 0; transform: translateY(-30px) scale(0.9); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes searchlightSweep {
+  0%, 100% { transform: scale(0.9); opacity: 0.15; }
+  50% { transform: scale(1.2); opacity: 0.3; }
+}
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.batman-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.batman-content .media[src=""],
+.batman-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.batman-amount, .batman-supporter, .batman-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.batman-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.batman-header > span + span { margin-left: 8px; }

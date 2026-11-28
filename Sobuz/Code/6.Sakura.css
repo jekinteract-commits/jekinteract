@@ -1,0 +1,169 @@
+/* StreamAlert Studio - Sakura | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Quicksand:wght@400;700&display=swap");
+.sakura-alert-wrapper, .sakura-alert-wrapper *, .sakura-alert-wrapper *::before, .sakura-alert-wrapper *::after { box-sizing: border-box; }
+
+.sakura-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Quicksand', sans-serif;
+  animation: sakuraBouncePop 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+
+.sakura-badge {
+  position: absolute;
+  top: 0px;
+  left: 22px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #FF6B8B;
+  color: #FFFFFF;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 4px 15px rgba(255, 107, 139, 0.4);
+}
+
+.sakura-petal {
+  position: absolute;
+  pointer-events: none;
+  z-index: 20;
+  font-size: 18px;
+}
+
+.petal-1 { top: 8px; right: 40px; animation: floatPetal1 3s infinite ease-in-out; }
+.petal-2 { bottom: 6px; left: 35px; animation: floatPetal2 3.5s infinite ease-in-out; }
+
+.sakura-sparkle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 20;
+  font-size: 14px;
+  color: #FFD166;
+}
+
+.sparkle-cute-1 { top: 12px; left: 160px; animation: sparkleBlink 2s infinite ease-in-out; }
+.sparkle-cute-2 { bottom: 10px; right: 55px; animation: sparkleBlink 2.4s infinite ease-in-out 0.5s; }
+
+.sakura-alert-card {
+  position: relative;
+  background: #FFF5F7;
+  border: 2.5px solid #FF6B8B;
+  border-radius: 26px;
+  padding: 22px 28px;
+  min-height: 105px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 16px 35px rgba(255, 107, 139, 0.25), 0 8px 20px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.sakura-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.sakura-header {
+  font-size: 22px;
+  line-height: 1.25;
+  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sakura-amount {
+  color: #FF3366;
+  font-size: 26px;
+  font-weight: 800;
+  text-shadow: 0 1px 3px rgba(255, 51, 102, 0.25);
+}
+
+.sakura-from {
+  color: #8C5E6F;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.sakura-supporter {
+  color: #9D72FF;
+  font-size: 24px;
+  font-weight: 800;
+  text-shadow: 0 1px 3px rgba(157, 114, 255, 0.25);
+}
+
+.sakura-message {
+  color: #4A2834;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 107, 139, 0.3);
+  padding: 4px 16px;
+  border-radius: 14px;
+}
+
+/* Animations used by this theme only */
+@keyframes floatPetal1 {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(15deg); }
+}
+
+@keyframes floatPetal2 {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(6px) rotate(-15deg); }
+}
+
+@keyframes sakuraBouncePop {
+  0% { opacity: 0; transform: scale(0.8) translateY(20px); }
+  60% { transform: scale(1.04) translateY(-3px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes sparkleBlink {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.sakura-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.sakura-content .media[src=""],
+.sakura-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.sakura-amount, .sakura-supporter, .sakura-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.sakura-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.sakura-header > span + span { margin-left: 8px; }

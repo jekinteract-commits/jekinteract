@@ -1,0 +1,175 @@
+/* StreamAlert Studio - Royal | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Montserrat:wght@400;500;600;700;800;900&display=swap");
+.royal-alert-wrapper, .royal-alert-wrapper *, .royal-alert-wrapper *::before, .royal-alert-wrapper *::after { box-sizing: border-box; }
+
+.royal-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Cinzel', serif;
+  animation: royalFadeScale 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.royal-badge {
+  position: absolute;
+  top: 0px;
+  left: 20px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #1A1612;
+  border: 1.5px solid #D4AF37;
+  color: #D4AF37;
+  padding: 4px 14px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  border-radius: 4px;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+}
+
+.royal-sparkle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 20;
+  color: #FFDF73;
+  font-size: 14px;
+}
+
+.dust-1 { top: 12px; right: 45px; animation: sparkleTwinkle 2.5s infinite ease-in-out; }
+.dust-2 { bottom: 10px; left: 40px; animation: sparkleTwinkle 2.8s infinite ease-in-out 0.8s; }
+
+.royal-alert-card {
+  position: relative;
+  background: #0E0E12;
+  border: 1.5px solid #D4AF37;
+  outline: 1.5px solid rgba(212, 175, 55, 0.45);
+  outline-offset: -5px;
+  border-radius: 6px;
+  padding: 22px 30px;
+  min-height: 105px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.95), 0 0 25px rgba(212, 175, 55, 0.25);
+  overflow: hidden;
+}
+
+.royal-corner {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: #FFDF73;
+  border-style: solid;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.c-top-left { top: 8px; left: 8px; border-width: 2px 0 0 2px; }
+.c-top-right { top: 8px; right: 8px; border-width: 2px 2px 0 0; }
+.c-bottom-left { bottom: 8px; left: 8px; border-width: 0 0 2px 2px; }
+.c-bottom-right { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+
+.royal-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.royal-header {
+  font-size: 21px;
+  line-height: 1.25;
+  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.royal-amount {
+  font-family: 'Cinzel', serif;
+  background: linear-gradient(135deg, #FFDF73 0%, #D4AF37 50%, #F5E6BE 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 900;
+  font-size: 24px;
+  letter-spacing: 1px;
+}
+
+.royal-from {
+  color: #A39D90;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-weight: 600;
+}
+
+.royal-supporter {
+  font-family: 'Montserrat', sans-serif;
+  color: #FFFFFF;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
+}
+
+.royal-message {
+  font-family: 'Montserrat', sans-serif;
+  color: #E2DFD8;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+  font-style: italic;
+}
+
+.royal-quote { color: #D4AF37; font-size: 18px; font-weight: 800; }
+
+/* Animations used by this theme only */
+@keyframes royalFadeScale {
+  0% { opacity: 0; transform: scale(0.92) translateY(15px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes sparkleTwinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.6) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.2) rotate(45deg); }
+}
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.royal-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.royal-content .media[src=""],
+.royal-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.royal-amount, .royal-supporter, .royal-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.royal-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.royal-header > span + span { margin-left: 8px; }

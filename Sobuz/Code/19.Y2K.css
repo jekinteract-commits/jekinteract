@@ -1,0 +1,76 @@
+/* StreamAlert Studio - Y2K | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;600;700;800&family=Press+Start+2P&display=swap");
+.y2k-alert-wrapper, .y2k-alert-wrapper *, .y2k-alert-wrapper *::before, .y2k-alert-wrapper *::after { box-sizing: border-box; }
+
+.y2k-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Geist Mono', monospace;
+  animation: y2kAlertIn 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+.y2k-badge {
+  position: absolute;
+  top: 0px;
+  left: 20px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #000080;
+  color: #FFFFFF;
+  border: 1.5px solid #C0C0C0;
+  padding: 4px 14px 4px 10px;
+  box-shadow: 2px 2px 0px #000;
+}
+.y2k-badge-text { font-family: 'Press Start 2P', monospace; font-size: 10px; }
+.y2k-alert-card {
+  position: relative;
+  background: #C0C0C0;
+  border: 3px outset #FFFFFF;
+  box-shadow: 4px 4px 0px #000000;
+  padding: 22px 26px 18px;
+  overflow: hidden;
+}
+.y2k-content { position: relative; z-index: 5; display: flex; flex-direction: column; gap: 8px; color: #000; }
+.y2k-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.y2k-amount { font-family: 'Press Start 2P', monospace; font-size: 18px; color: #000080; }
+.y2k-from { font-size: 12px; font-weight: 700; color: #475569; }
+.y2k-supporter { font-family: 'Geist Mono', monospace; font-size: 16px; font-weight: 800; color: #000; }
+.y2k-message { font-size: 13px; font-weight: 600; color: #000; background: #FFFFFF; border: 2px inset #808080; padding: 8px 12px; }
+@keyframes y2kAlertIn { 0% { opacity: 0; transform: scale(0.8); } 100% { opacity: 1; transform: scale(1); } }
+
+/* Shared SVG badge and watermark helpers used by themes 11–22 */
+.theme-badge-icon { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+.theme-watermark { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); width: 130px; height: 130px; opacity: 0.14; pointer-events: none; z-index: 1; }
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.y2k-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.y2k-content .media[src=""],
+.y2k-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.y2k-amount, .y2k-supporter, .y2k-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.y2k-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.y2k-header > span + span { margin-left: 8px; }

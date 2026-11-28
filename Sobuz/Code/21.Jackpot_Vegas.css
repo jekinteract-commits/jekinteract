@@ -1,0 +1,78 @@
+/* StreamAlert Studio - Jackpot Vegas | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=Righteous&display=swap");
+.jackpot-alert-wrapper, .jackpot-alert-wrapper *, .jackpot-alert-wrapper *::before, .jackpot-alert-wrapper *::after { box-sizing: border-box; }
+
+.jackpot-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  animation: jackpotAlertIn 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+.jackpot-badge {
+  position: absolute;
+  top: 0px;
+  left: 20px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #080711;
+  color: #F59E0B;
+  border: 1.5px solid #F59E0B;
+  padding: 4px 14px 4px 10px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.6);
+}
+.jackpot-badge-text { font-family: 'Righteous', cursive; font-size: 13px; letter-spacing: 0.8px; }
+.jackpot-alert-card {
+  position: relative;
+  background: linear-gradient(135deg, #080711 0%, #1A132B 100%);
+  border: 2px solid #F59E0B;
+  border-radius: 16px;
+  padding: 22px 26px 18px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8), 0 0 35px rgba(245, 158, 11, 0.35);
+  overflow: hidden;
+}
+.jackpot-content { position: relative; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+.jackpot-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.jackpot-amount { font-family: 'Righteous', cursive; font-size: 28px; color: #F59E0B; }
+.jackpot-from { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.6); }
+.jackpot-supporter { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; color: #FFFFFF; }
+.jackpot-message { font-size: 14px; color: #F8FAFC; background: rgba(0, 0, 0, 0.4); padding: 8px 14px; border-radius: 8px; border-left: 3px solid #F59E0B; }
+@keyframes jackpotAlertIn { 0% { opacity: 0; transform: scale(0.7) translateY(-20px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+
+/* Shared SVG badge and watermark helpers used by themes 11–22 */
+.theme-badge-icon { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+.theme-watermark { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); width: 130px; height: 130px; opacity: 0.14; pointer-events: none; z-index: 1; }
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.jackpot-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.jackpot-content .media[src=""],
+.jackpot-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.jackpot-amount, .jackpot-supporter, .jackpot-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.jackpot-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.jackpot-header > span + span { margin-left: 8px; }

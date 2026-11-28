@@ -1,0 +1,124 @@
+/* StreamAlert Studio - Minimalist | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+.minimal-alert-wrapper, .minimal-alert-wrapper *, .minimal-alert-wrapper *::before, .minimal-alert-wrapper *::after { box-sizing: border-box; }
+
+.minimal-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  animation: minimalFloatIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.minimal-badge {
+  position: absolute;
+  top: 0px;
+  left: 20px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #0F172A;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #94A3B8;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.minimal-status-dot {
+  width: 6px;
+  height: 6px;
+  background: #00F59B;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #00F59B;
+}
+
+.minimal-alert-card {
+  position: relative;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 22px 28px;
+  min-height: 105px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+.minimal-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.minimal-header {
+  font-size: 21px;
+  line-height: 1.25;
+  margin-bottom: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.minimal-amount { color: #00F59B; font-size: 24px; font-weight: 800; }
+.minimal-separator { color: #64748B; font-weight: 600; }
+.minimal-from { color: #94A3B8; font-size: 14px; font-weight: 600; }
+.minimal-supporter { color: #FFFFFF; font-size: 22px; font-weight: 700; }
+
+.minimal-message {
+  color: #CBD5E1;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+/* Animations used by this theme only */
+@keyframes minimalFloatIn {
+  0% { opacity: 0; transform: translateY(15px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.minimal-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.minimal-content .media[src=""],
+.minimal-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.minimal-amount, .minimal-supporter, .minimal-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.minimal-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.minimal-header > span + span { margin-left: 8px; }

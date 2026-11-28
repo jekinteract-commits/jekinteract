@@ -1,0 +1,78 @@
+/* StreamAlert Studio - Gothic Vampire | SociaBuzz Custom Alert (kolom CSS)
+   HTML: {media} {amount} {from_text} {supporter} {message} */
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&family=Cinzel:wght@400;600;800&display=swap");
+.gothic-alert-wrapper, .gothic-alert-wrapper *, .gothic-alert-wrapper *::before, .gothic-alert-wrapper *::after { box-sizing: border-box; }
+
+.gothic-alert-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding-top: 15px;
+  font-family: 'Montserrat', sans-serif;
+  animation: gothicAlertIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.gothic-badge {
+  position: absolute;
+  top: 0px;
+  left: 20px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #090508;
+  color: #E11D48;
+  border: 1.5px solid #881337;
+  padding: 4px 14px 4px 10px;
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(136, 19, 55, 0.6);
+}
+.gothic-badge-text { font-family: 'Cinzel', serif; font-size: 12px; font-weight: 800; letter-spacing: 1px; }
+.gothic-alert-card {
+  position: relative;
+  background: linear-gradient(135deg, #090508 0%, #1A0912 100%);
+  border: 1.5px solid #881337;
+  border-radius: 8px;
+  padding: 22px 26px 18px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.9), 0 0 30px rgba(225, 29, 72, 0.3);
+  overflow: hidden;
+}
+.gothic-content { position: relative; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+.gothic-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.gothic-amount { font-family: 'Cinzel', serif; font-size: 26px; font-weight: 800; color: #E11D48; }
+.gothic-from { font-size: 13px; font-weight: 600; color: #FDA4AF; }
+.gothic-supporter { font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 800; color: #FFFFFF; }
+.gothic-message { font-size: 13px; color: #F8FAFC; background: rgba(0, 0, 0, 0.5); padding: 8px 14px; border-radius: 6px; border-left: 3px solid #881337; }
+@keyframes gothicAlertIn { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
+
+/* Shared SVG badge and watermark helpers used by themes 11–22 */
+.theme-badge-icon { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+.theme-watermark { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); width: 130px; height: 130px; opacity: 0.14; pointer-events: none; z-index: 1; }
+
+/* {media} - GIF/gambar dari SociaBuzz; otomatis hilang kalau kosong */
+.gothic-content .media {
+  display: block;
+  align-self: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.gothic-content .media[src=""],
+.gothic-content .media:not([src]) { display: none; }
+
+/* Teks dinamis: nama / pesan panjang tetap rapi di dalam kartu */
+.gothic-amount, .gothic-supporter, .gothic-message {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.gothic-msg-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+
+/* Sociabuzz compatibility: keep clear spacing between amount, "Dari", and supporter name. */
+.gothic-header > span + span { margin-left: 8px; }
